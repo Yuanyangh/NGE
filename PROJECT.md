@@ -24,7 +24,7 @@ This document is the single source of truth for building Phase 1 of the TyeUps N
 
 1. **Config-driven:** All commission logic reads from a versioned JSON plan config. Zero hardcoded business rules.
 2. **Idempotent calculations:** Running commissions for the same date twice produces identical results.
-3. **Double-entry wallet:** Every credit has a debit. Balances are derived, never stored as mutable fields.
+3. **Immutable movement ledger wallet:** Wallet balances are derived from SUM(wallet_movements.amount), never stored as mutable fields. This is a single-account immutable movement ledger — every state change (commission credit, release, clawback, withdrawal) is an append-only record. This is NOT a full accounting double-entry system with contra accounts; that's Phase 2 for accounting/ERP export.
 4. **Multi-tenant from day one:** Every model is scoped to a `company_id`. Middleware resolves tenant context.
 5. **Testable services:** Calculation services are stateless. They receive config DTOs + data, return results. No database calls inside calculators.
 6. **Immutable ledgers:** Transaction and commission ledger entries are append-only. Corrections are new entries, not updates.

@@ -33,7 +33,7 @@ php artisan wallet:credit socomm          # Run weekly wallet crediting
 
 1. **All commission logic reads from PlanConfig DTO.** Never hardcode business rules.
 2. **Services are stateless.** They receive data + config, return results. No side effects except the orchestrator.
-3. **Double-entry wallet.** Balance = SUM(wallet_movements.amount). No mutable balance field.
+3. **Immutable movement ledger wallet.** Balance = SUM(wallet_movements.amount). No mutable balance field. This is a single-account movement ledger, not an accounting double-entry system. Every wallet state change (credit, release, clawback, withdrawal) is an append-only movement record. Phase 2 may introduce full double-entry with contra accounts for accounting export.
 4. **Multi-tenant.** Every query scoped to company_id. Use CompanyScope global scope.
 5. **Immutable ledgers.** Never UPDATE transaction or commission_ledger rows. Corrections = new entries.
 6. **Money precision.** Use brick/money or bcmath. Never use float for money.

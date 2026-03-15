@@ -48,7 +48,8 @@ class LegAggregator
                 ->whereIn('user_id', $subtreeUserIds)
                 ->where('status', 'confirmed')
                 ->where('qualifies_for_commission', true)
-                ->whereBetween('transaction_date', [$windowStart->toDateString(), $date->toDateString()])
+                ->whereDate('transaction_date', '>=', $windowStart->toDateString())
+                ->whereDate('transaction_date', '<=', $date->toDateString())
                 ->sum('xp');
 
             $legs[] = [

@@ -75,7 +75,8 @@ class QualificationEvaluator
                 ->where('company_id', $affiliate->company_id)
                 ->where('status', 'confirmed')
                 ->where('qualifies_for_commission', true)
-                ->whereBetween('transaction_date', [$windowStart->toDateString(), $windowEnd->toDateString()])
+                ->whereDate('transaction_date', '>=', $windowStart->toDateString())
+                ->whereDate('transaction_date', '<=', $windowEnd->toDateString())
                 ->where('xp', '>=', $minXp)
                 ->distinct('user_id')
                 ->count('user_id');
@@ -87,7 +88,8 @@ class QualificationEvaluator
             ->where('company_id', $affiliate->company_id)
             ->where('status', 'confirmed')
             ->where('qualifies_for_commission', true)
-            ->whereBetween('transaction_date', [$windowStart->toDateString(), $windowEnd->toDateString()])
+            ->whereDate('transaction_date', '>=', $windowStart->toDateString())
+            ->whereDate('transaction_date', '<=', $windowEnd->toDateString())
             ->groupBy('user_id')
             ->havingRaw('SUM(xp) >= ?', [$minXp])
             ->select('user_id', DB::raw('SUM(xp) as total_xp'))
@@ -102,7 +104,8 @@ class QualificationEvaluator
             ->where('company_id', $affiliate->company_id)
             ->where('status', 'confirmed')
             ->where('qualifies_for_commission', true)
-            ->whereBetween('transaction_date', [$windowStart->toDateString(), $windowEnd->toDateString()])
+            ->whereDate('transaction_date', '>=', $windowStart->toDateString())
+            ->whereDate('transaction_date', '<=', $windowEnd->toDateString())
             ->sum('xp');
 
         return (string) $volume;

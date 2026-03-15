@@ -71,7 +71,8 @@ class CommissionRunOrchestrator
                 ->where('company_id', $company->id)
                 ->where('status', 'confirmed')
                 ->where('qualifies_for_commission', true)
-                ->whereBetween('transaction_date', [$windowStart->toDateString(), $date->toDateString()])
+                ->whereDate('transaction_date', '>=', $windowStart->toDateString())
+                ->whereDate('transaction_date', '<=', $date->toDateString())
                 ->sum('xp');
 
             // 8. Write ledger entries
@@ -226,10 +227,10 @@ class CommissionRunOrchestrator
         $plan = CompensationPlan::withoutGlobalScopes()
             ->where('company_id', $company->id)
             ->where('is_active', true)
-            ->where('effective_from', '<=', $date->toDateString())
+            ->whereDate('effective_from', '<=', $date->toDateString())
             ->where(function ($query) use ($date) {
                 $query->whereNull('effective_until')
-                    ->orWhere('effective_until', '>=', $date->toDateString());
+                    ->orWhereDate('effective_until', '>=', $date->toDateString());
             })
             ->orderByDesc('effective_from')
             ->first();

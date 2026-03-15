@@ -117,7 +117,8 @@ class CapEnforcer
             ->where('company_id', $companyId)
             ->where('status', 'confirmed')
             ->where('qualifies_for_commission', true)
-            ->whereBetween('transaction_date', [$windowStart->toDateString(), $windowEnd->toDateString()])
+            ->whereDate('transaction_date', '>=', $windowStart->toDateString())
+            ->whereDate('transaction_date', '<=', $windowEnd->toDateString())
             ->sum('xp');
 
         return (string) $volume;
@@ -129,7 +130,8 @@ class CapEnforcer
             ->where('company_id', $companyId)
             ->where('type', 'viral_commission')
             ->whereHas('commissionRun', function ($query) use ($windowStart, $windowEnd) {
-                $query->whereBetween('run_date', [$windowStart->toDateString(), $windowEnd->toDateString()]);
+                $query->whereDate('run_date', '>=', $windowStart->toDateString())
+                    ->whereDate('run_date', '<=', $windowEnd->toDateString());
             })
             ->sum('amount');
 
@@ -142,7 +144,8 @@ class CapEnforcer
             ->where('company_id', $companyId)
             ->whereIn('type', ['affiliate_commission', 'viral_commission'])
             ->whereHas('commissionRun', function ($query) use ($windowStart, $windowEnd) {
-                $query->whereBetween('run_date', [$windowStart->toDateString(), $windowEnd->toDateString()]);
+                $query->whereDate('run_date', '>=', $windowStart->toDateString())
+                    ->whereDate('run_date', '<=', $windowEnd->toDateString());
             })
             ->sum('amount');
 
