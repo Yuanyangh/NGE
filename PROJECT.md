@@ -1033,3 +1033,725 @@ The SoComm doc says "a cap is applied to adjust the rewards to 35%." This is act
 - **Naming:** Services use verb methods (`calculate`, `evaluate`, `enforce`). DTOs are value objects.
 - **Exceptions:** Custom exception classes in `app/Exceptions/Commission/` for business rule violations.
 - **Logging:** Every commission run logs start, end, totals, and any cap triggers.
+
+---
+---
+
+# PHASE 2 — SCENARIO SIMULATOR + AFFILIATE DASHBOARD
+
+Phase 1 delivered the calculation engine, admin panel, and API. Phase 2 adds the two features that make this a product people can see and use: a financial simulator for admins/finance and a self-service dashboard for affiliates.
+
+---
+
+## P2-1. TRACK A: SCENARIO SIMULATOR
+
+### Purpose
+
+The simulator lets admins and finance teams answer "what if" questions about compensation plan sustainability before committing to changes. It takes a set of assumptions (growth, order volume, retention, conversion) and projects payout exposure over a configurable time horizon.
+
+This is also the B2B demo tool — a prospect plugs in their plan parameters and sees projected payout ratios before signing up.
+
+### Architecture
+
+The simulator is a **standalone module** that does NOT touch the live commission engine. It creates a sandboxed projection using the same PlanConfig structure and calculation logic, but against synthetic data generated from assumptions rather than real transactions.
+
+```
+app/
+├── Services/
+│   └── Simulator/
+│       ├── SimulatorOrchestrator.php       # Coordinates full simulation run
+│       ├── NetworkGrowthProjector.php      # Projects user/affiliate tree growth
+│       ├── TransactionProjector.php        # Projects synthetic transactions
+│       ├── PayoutProjector.php             # Runs commission logic on projected data
+│       └── SimulatorReportBuilder.php      # Compiles results into report DTO
+│
+├── DTOs/
+│   ├── SimulationConfig.php               # Input assumptions
+│   ├── SimulationResult.php               # Full output report
+│   ├── DayProjection.php                  # Single day's projected numbers
+│   └── PayoutBreakdown.php               # Breakdown by commission type
+│
+├── Models/
+│   └── SimulationRun.php                  # Persisted simulation for comparison
+│
+└── Http/Controllers/Api/
+    └── SimulatorController.php
+```
+
+### New Database Table
+
+```sql
+CREATE TABLE simulation_runs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    company_id BIGINT UNSIGNED NOT NULL,
+    compensation_plan_id BIGINT UNSIGNED NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    config JSON NOT NULL,                          -- SimulationConfig snapshot
+    results JSON NOT NULL,                         -- SimulationResult output
+    projection_days INT NOT NULL,
+    status ENUM('pending', 'running', 'completed', 'failed') NOT NULL DEFAULT 'pending',
+    started_at TIMESTAMP NULL,
+    completed_at TIMESTAMP NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    FOREIGN KEY (company_id) REFERENCES companies(id),
+    FOREIGN KEY (compensation_plan_id) REFERENCES compensation_plans(id)
+);
+```
+
+### SimulationConfig DTO
+
+These are the assumptions the admin inputs:
+
+```json
+{
+    "projection_days": 90,
+    "starting_affiliates": 50,
+    "starting_customers": 200,
+
+    "growth": {
+        "new_affiliates_per_day": 2,
+        "new_customers_per_affiliate_per_month": 3,
+        "affiliate_to_customer_ratio": 0.15,
+        "growth_curve": "linear"
+    },
+
+    "transactions": {
+        "average_order_xp": 45,
+        "orders_per_customer_per_month": 1.5,
+        "smartship_adoption_rate": 0.30,
+        "smartship_average_xp": 35,
+        "refund_rate": 0.05
+    },
+
+    "retention": {
+        "customer_monthly_churn_rate": 0.08,
+        "affiliate_monthly_churn_rate": 0.05
+    },
+
+    "tree_shape": {
+        "average_legs_per_affiliate": 3,
+        "leg_balance_ratio": 0.6,
+        "depth_bias": "moderate"
+    }
+}
+```
+
+### SimulationResult DTO
+
+The output the simulator produces:
+
+```json
+{
+    "summary": {
+        "projection_days": 90,
+        "total_projected_volume": 450000,
+        "total_affiliate_commissions": 54000,
+        "total_viral_commissions": 22500,
+        "total_payout": 76500,
+        "payout_ratio_percent": 17.0,
+        "viral_cap_triggered_days": 3,
+        "global_cap_triggered_days": 0,
+        "average_affiliate_earning_per_day": 12.40,
+        "top_earner_daily_average": 340.00,
+        "top_earner_concentration_percent": 8.5
+    },
+
+    "daily_projections": [
+        {
+            "day": 1,
+            "date": "2026-04-01",
+            "total_affiliates": 52,
+            "total_customers": 206,
+            "active_customers": 180,
+            "daily_volume": 4800,
+            "rolling_30d_volume": 144000,
+            "affiliate_commissions": 580,
+            "viral_commissions": 245,
+            "total_payout": 825,
+            "payout_ratio_percent": 17.2,
+            "viral_cap_applied": false,
+            "global_cap_applied": false
+        }
+    ],
+
+    "payout_breakdown": {
+        "by_commission_type": {
+            "affiliate": {"total": 54000, "percent_of_volume": 12.0},
+            "viral": {"total": 22500, "percent_of_volume": 5.0}
+        },
+        "by_tier_distribution": {
+            "affiliate_tiers": [
+                {"tier_rate": 0.10, "affiliate_count": 30, "total_paid": 8000},
+                {"tier_rate": 0.13, "affiliate_count": 12, "total_paid": 15000}
+            ],
+            "viral_tiers": [
+                {"tier": 1, "affiliate_count": 25, "total_paid": 1192},
+                {"tier": 5, "affiliate_count": 8, "total_paid": 3600}
+            ]
+        }
+    },
+
+    "risk_indicators": {
+        "payout_ratio_trend": "stable",
+        "cap_trigger_frequency": "rare",
+        "top_earner_concentration": "low",
+        "sustainability_score": 85
+    }
+}
+```
+
+### Simulation Algorithm
+
+```
+Input: SimulationConfig, PlanConfig (from selected compensation plan)
+
+For each day D from 1 to projection_days:
+
+  1. GROW THE NETWORK
+     - Add new affiliates based on growth.new_affiliates_per_day
+     - Each new affiliate gets assigned to a random existing affiliate as sponsor
+     - Respect tree_shape.average_legs_per_affiliate and leg_balance_ratio
+     - Apply affiliate churn (mark some as inactive)
+     - Add new customers per active affiliate based on growth rate
+     - Apply customer churn
+
+  2. GENERATE SYNTHETIC TRANSACTIONS
+     - For each active customer: probability of ordering today =
+       orders_per_customer_per_month / 30
+     - If ordering: generate transaction with average_order_xp
+       (add ±20% randomness)
+     - SmartShip customers: guaranteed monthly order at smartship_average_xp
+     - Apply refund_rate: randomly mark some transactions as reversed
+
+  3. RUN COMMISSION CALCULATIONS (reuse Phase 1 services)
+     - Use QualificationEvaluator on synthetic data
+     - Use DirectCommissionCalculator on today's new volume
+     - Use LegAggregator + QvvCalculator + ViralCommissionCalculator
+     - Use CapEnforcer
+     - Record daily totals (do NOT write to real commission ledger)
+
+  4. RECORD DAY PROJECTION
+     - Store daily snapshot in DayProjection DTO
+     - Accumulate running totals
+
+After all days:
+  5. COMPILE REPORT
+     - Calculate summary statistics
+     - Compute tier distributions
+     - Calculate risk indicators
+     - Return SimulationResult
+```
+
+**CRITICAL:** The simulator reuses Phase 1 calculator services (QualificationEvaluator, DirectCommissionCalculator, QvvCalculator, etc.) but operates on **in-memory synthetic data**, NOT the real database. The projectors generate arrays/collections of synthetic users and transactions, then pass them to the calculators the same way the real orchestrator does. This means any plan config changes are automatically reflected in simulations.
+
+### Service Contracts
+
+#### SimulatorOrchestrator
+
+```php
+class SimulatorOrchestrator
+{
+    public function run(Company $company, CompensationPlan $plan, SimulationConfig $config): SimulationResult
+    {
+        // 1. Initialize synthetic network from starting_affiliates + starting_customers
+        // 2. Loop through projection_days:
+        //    a. NetworkGrowthProjector->projectDay(currentNetwork, config, dayNumber)
+        //    b. TransactionProjector->projectDay(currentNetwork, config, dayNumber)
+        //    c. PayoutProjector->projectDay(syntheticTransactions, syntheticTree, planConfig)
+        // 3. SimulatorReportBuilder->build(allDayProjections, config)
+        // 4. Persist SimulationRun record
+        // 5. Return SimulationResult
+    }
+}
+```
+
+#### NetworkGrowthProjector
+
+```php
+class NetworkGrowthProjector
+{
+    public function projectDay(Collection $currentNetwork, SimulationConfig $config, int $day): Collection
+    {
+        // Returns updated network collection with:
+        // - New affiliates added (with sponsor assignment respecting tree shape)
+        // - New customers added (distributed across active affiliates)
+        // - Churned users marked inactive
+        // - Active customer counts updated
+    }
+}
+```
+
+#### PayoutProjector
+
+```php
+class PayoutProjector
+{
+    public function projectDay(
+        Collection $syntheticTransactions,
+        Collection $syntheticTree,
+        PlanConfig $planConfig,
+        Carbon $projectedDate
+    ): DayProjection
+    {
+        // Wraps Phase 1 calculators:
+        // - Builds qualification snapshots from synthetic data
+        // - Runs DirectCommissionCalculator with synthetic daily volume
+        // - Runs QvvCalculator with synthetic leg volumes
+        // - Runs ViralCommissionCalculator
+        // - Runs CapEnforcer
+        // Returns DayProjection with all daily totals
+    }
+}
+```
+
+### Simulator UI (Filament Admin Page)
+
+Build as a custom Filament page, NOT a resource (there's no CRUD — it's a tool).
+
+**Input Form:**
+- Select company and compensation plan
+- Simulation name (for saving/comparing)
+- Projection days slider (30 / 60 / 90 / 180 / 365)
+- Growth assumptions section (all fields from SimulationConfig.growth)
+- Transaction assumptions section (all fields from SimulationConfig.transactions)
+- Retention assumptions section (churn rates)
+- Tree shape section (legs, balance ratio)
+- "Run Simulation" button
+
+**Results Display:**
+- Summary cards: total payout, payout ratio %, cap trigger count, sustainability score
+- Line chart: daily payout ratio over projection period (use Filament's chart widgets)
+- Stacked area chart: affiliate vs viral commissions over time
+- Table: tier distribution (how many affiliates at each tier, total paid per tier)
+- Risk indicators with color coding (green/yellow/red)
+- "Export PDF" and "Export CSV" buttons
+- "Save & Compare" — save this run and overlay results from previous runs
+
+### Simulator API Endpoint
+
+```
+POST /api/companies/{company}/simulations
+Body: SimulationConfig JSON
+Returns: SimulationResult JSON
+
+GET /api/companies/{company}/simulations
+Returns: List of saved simulation runs
+
+GET /api/companies/{company}/simulations/{simulation}
+Returns: Full SimulationResult for a saved run
+```
+
+### Test Scenarios for Simulator
+
+```
+Test S1: Zero Growth
+  Input: 0 new affiliates/day, 0 new customers
+  Expected: Flat payout, no tier progression, stable ratio
+
+Test S2: High Growth
+  Input: 10 new affiliates/day, 5 customers per affiliate/month
+  Expected: Increasing payout, tier progression visible, check cap triggers
+
+Test S3: High Churn
+  Input: 20% monthly customer churn, 15% affiliate churn
+  Expected: Network shrinks, payouts decline, tier downgrades visible
+
+Test S4: Imbalanced Tree
+  Input: leg_balance_ratio = 0.1 (one mega-leg)
+  Expected: QVV caps reduce viral payouts significantly, lower sustainability score
+
+Test S5: Cap Stress Test
+  Input: Parameters designed to push viral commissions past 15%
+  Expected: Cap triggers on multiple days, reduced viral payouts in projections
+
+Test S6: Plan Comparison
+  Run same SimulationConfig against two different PlanConfig versions
+  Expected: Different payout totals, can compare side by side
+
+Test S7: Deterministic Seeding
+  Run same simulation twice with same random seed
+  Expected: Identical results (for reproducibility)
+```
+
+---
+
+## P2-2. TRACK B: AFFILIATE DASHBOARD
+
+### Purpose
+
+A self-service portal where affiliates log in and see their earnings, team, qualification progress, and wallet. This is the user-facing product — what makes the engine feel like a real platform.
+
+### Architecture
+
+The affiliate dashboard is a **separate authenticated area** from the Filament admin panel. Build with Laravel Livewire + Blade (or Inertia + Vue if preferred). It shares the same models and database but has its own routes, middleware, and views.
+
+```
+app/
+├── Http/
+│   ├── Controllers/
+│   │   └── Affiliate/
+│   │       ├── DashboardController.php
+│   │       ├── TeamController.php
+│   │       ├── CommissionsController.php
+│   │       └── WalletController.php
+│   ├── Middleware/
+│   │   ├── EnsureAffiliate.php            # Must be role=affiliate
+│   │   └── ResolveTenant.php              # Existing
+│   └── Livewire/
+│       ├── Dashboard/
+│       │   ├── EarningsSummary.php
+│       │   ├── TierProgress.php
+│       │   ├── QualificationStatus.php
+│       │   └── RecentActivity.php
+│       ├── Team/
+│       │   ├── GenealogyTree.php
+│       │   ├── LegHealthPanel.php
+│       │   └── TeamStats.php
+│       ├── Commissions/
+│       │   ├── CommissionHistory.php
+│       │   └── CommissionBreakdown.php
+│       └── Wallet/
+│           ├── WalletBalance.php
+│           └── MovementHistory.php
+│
+├── Services/
+│   └── Affiliate/
+│       ├── AffiliateDashboardService.php  # Aggregates all dashboard data
+│       ├── TierProgressService.php        # Calculates progress to next tier
+│       └── TeamStatsService.php           # Computes team/leg statistics
+│
+├── DTOs/
+│   ├── AffiliateDashboardData.php
+│   ├── TierProgressData.php
+│   ├── LegHealthData.php
+│   └── TeamStatsData.php
+│
+resources/
+├── views/
+│   └── affiliate/
+│       ├── layouts/
+│       │   └── app.blade.php              # Dashboard shell layout
+│       ├── dashboard.blade.php
+│       ├── team.blade.php
+│       ├── commissions.blade.php
+│       └── wallet.blade.php
+```
+
+### Routes
+
+```php
+// routes/web.php
+Route::middleware(['auth', 'ensure.affiliate', 'resolve.tenant'])
+    ->prefix('affiliate')
+    ->name('affiliate.')
+    ->group(function () {
+        Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/team', [TeamController::class, 'index'])->name('team');
+        Route::get('/commissions', [CommissionsController::class, 'index'])->name('commissions');
+        Route::get('/wallet', [WalletController::class, 'index'])->name('wallet');
+    });
+```
+
+### Dashboard Page — What the Affiliate Sees
+
+#### Top Section: Earnings Summary
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Total Earned (30d)    Pending         Wallet Balance    │
+│  $247.50               $38.20          $1,420.80         │
+│                                                          │
+│  Affiliate Commission Rate: 15%   Viral Tier: 7         │
+└─────────────────────────────────────────────────────────┘
+```
+
+Data source: `AffiliateDashboardService` aggregates from commission_ledger_entries and wallet_movements.
+
+#### Tier Progress Section
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  AFFILIATE COMMISSION PROGRESS                           │
+│                                                          │
+│  Current: 15% (5 customers, 1,050 XP)                   │
+│  Next:    16% (need 6 customers + 1,200 XP)             │
+│                                                          │
+│  Customers: ████████░░ 5/6                               │
+│  Volume:    ███████░░░ 1,050/1,200 XP                   │
+│  You need: 1 more active customer + 150 more XP         │
+├─────────────────────────────────────────────────────────┤
+│  VIRAL COMMISSION PROGRESS                               │
+│                                                          │
+│  Current: Tier 7 ($10.00/day)                            │
+│  Next:    Tier 8 ($12.50/day) — need 2,500 QVV          │
+│                                                          │
+│  QVV: ████████░░ 2,100/2,500                             │
+│  You need: 400 more Qualifying Viral Volume              │
+└─────────────────────────────────────────────────────────┘
+```
+
+Data source: `TierProgressService` — takes current qualification snapshot and finds the next tier's requirements, computes the delta.
+
+#### TierProgressService Contract
+
+```php
+class TierProgressService
+{
+    public function calculate(User $affiliate, Carbon $date, PlanConfig $config): TierProgressData
+    {
+        // Uses QualificationEvaluator to get current status
+        // Finds next affiliate tier and next viral tier
+        // Computes deltas:
+        //   - customers_needed: max(0, next_tier.min_customers - current_customers)
+        //   - volume_needed: max(0, next_tier.min_volume - current_volume)
+        //   - qvv_needed: max(0, next_viral_tier.min_qvv - current_qvv)
+        // Returns TierProgressData with current, next, deltas, and progress percentages
+    }
+}
+```
+
+#### Team Page
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  TEAM OVERVIEW                                           │
+│                                                          │
+│  Total Team Size: 47    Active Affiliates: 32            │
+│  Active Customers: 128  Team Volume (30d): 8,500 XP     │
+├─────────────────────────────────────────────────────────┤
+│  LEG HEALTH                                              │
+│                                                          │
+│  Leg 1 (Alice):   3,200 XP  ████████████░░ STRONG       │
+│  Leg 2 (Bob):     1,800 XP  ████████░░░░░ MODERATE      │
+│  Leg 3 (Carol):     500 XP  ███░░░░░░░░░ WEAK           │
+│                                                          │
+│  ⚠ Your large leg (Leg 1) is capping your QVV.          │
+│  Focus on growing Leg 2 and Leg 3 for better rewards.   │
+├─────────────────────────────────────────────────────────┤
+│  GENEALOGY TREE (expandable)                             │
+│                                                          │
+│  You                                                     │
+│  ├── Alice (affiliate, active) — 3,200 XP               │
+│  │   ├── Dave (customer, active)                         │
+│  │   ├── Eve (affiliate, active) — 1,200 XP             │
+│  │   │   └── Frank (customer, active)                    │
+│  │   └── Grace (customer, inactive)                      │
+│  ├── Bob (affiliate, active) — 1,800 XP                 │
+│  │   └── Hank (customer, active)                         │
+│  └── Carol (affiliate, active) — 500 XP                 │
+│      └── Ivy (customer, active)                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+Data source: `TeamStatsService` — uses LegAggregator for leg volumes, genealogy tree for the expandable view.
+
+#### TeamStatsService Contract
+
+```php
+class TeamStatsService
+{
+    public function calculate(User $affiliate, Carbon $date, PlanConfig $config): TeamStatsData
+    {
+        // Returns:
+        // - total_team_size (all descendants in tree)
+        // - active_affiliates (descendants with role=affiliate, status=active)
+        // - active_customers (descendants with qualifying orders in window)
+        // - total_team_volume_30d
+        // - legs: array of LegHealthData [
+        //     leg_root_user, volume, active_count, health_label (strong/moderate/weak),
+        //     is_large_leg, is_capping_qvv
+        //   ]
+        // - qvv_capping_warning: bool (true if large leg is being capped)
+    }
+}
+```
+
+#### Commissions Page
+
+Simple paginated table with filters:
+
+| Date | Type | Tier | Amount | Cap Adjusted | Status |
+|------|------|------|--------|-------------|--------|
+| Mar 15 | Affiliate Commission | 15% | $6.40 | No | Credited |
+| Mar 15 | Viral Commission | Tier 7 | $10.00 | No | Credited |
+| Mar 14 | Affiliate Commission | 15% | $8.20 | No | Credited |
+
+Data source: `commission_ledger_entries` filtered by user, with pagination and date range filters.
+
+#### Wallet Page
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  WALLET                                                  │
+│                                                          │
+│  Available Balance:  $1,420.80                           │
+│  Pending Credits:    $38.20                              │
+│  Total Earned:       $3,847.50                           │
+│  Total Withdrawn:    $2,388.50                           │
+├─────────────────────────────────────────────────────────┤
+│  RECENT MOVEMENTS                                        │
+│                                                          │
+│  Mar 15  Commission Credit     +$16.40    Pending        │
+│  Mar 14  Commission Credit     +$18.20    Pending        │
+│  Mar 10  Weekly Release        +$142.50   Released       │
+│  Mar 08  Withdrawal            -$500.00   Completed      │
+└─────────────────────────────────────────────────────────┘
+```
+
+Data source: `wallet_movements` filtered by user's wallet_account, with derived balances.
+
+### AffiliateDashboardService Contract
+
+```php
+class AffiliateDashboardService
+{
+    public function getDashboardData(User $affiliate, Carbon $date): AffiliateDashboardData
+    {
+        // Aggregates everything for the dashboard page:
+        // - total_earned_30d: SUM(commission_ledger_entries.amount) for last 30 days
+        // - pending_amount: SUM(wallet_movements.amount) WHERE status=pending
+        // - wallet_balance: SUM(wallet_movements.amount) WHERE status IN (approved, released)
+        // - current_affiliate_rate: from QualificationEvaluator
+        // - current_viral_tier: from QualificationEvaluator
+        // - tier_progress: from TierProgressService
+        // - recent_activity: last 10 commission_ledger_entries
+    }
+}
+```
+
+### Authentication
+
+Affiliates log in through a separate login page (`/affiliate/login`), NOT through Filament. Use Laravel's built-in auth with these additions:
+
+- `EnsureAffiliate` middleware: checks `$user->role === 'affiliate'` or `$user->role === 'admin'` (admins can impersonate)
+- Login scoped to company (user must belong to the company resolved by tenant middleware)
+- Add `company_id` + `email` as the unique login credential pair
+- Session-based auth (not tokens — this is a web dashboard)
+
+### UI Framework
+
+Use **Tailwind CSS + Livewire** for the affiliate dashboard. Keep it clean and functional — this is an operational dashboard, not a marketing site.
+
+Required packages:
+```
+composer require livewire/livewire
+npm install -D tailwindcss @tailwindcss/forms
+```
+
+**Design principles:**
+- White/light gray background, clean card-based layout
+- Progress bars use brand color (configurable per company in Phase 3)
+- Mobile-responsive (affiliates will check this on phones)
+- Fast — Livewire components load data on mount, no unnecessary polling
+- Leg health uses color coding: green (strong), yellow (moderate), red (weak)
+
+### Test Scenarios for Affiliate Dashboard
+
+```
+Test D1: Dashboard loads for authenticated affiliate
+  Login as an affiliate, visit /affiliate
+  Expected: 200 response, sees earnings summary, tier progress, recent activity
+
+Test D2: Dashboard blocked for customers
+  Login as a customer (role=customer), visit /affiliate
+  Expected: 403 or redirect to login
+
+Test D3: Tier progress accuracy
+  Affiliate at tier 15% with 5 customers, 1050 XP
+  Expected: progress shows 5/6 customers, 1050/1200 XP, "need 1 customer + 150 XP"
+
+Test D4: Wallet balance derivation
+  Affiliate with known wallet movements
+  Expected: available balance matches SUM of approved+released movements
+
+Test D5: Commission history pagination
+  Affiliate with 50+ commission entries
+  Expected: paginated correctly, filters work by date range and type
+
+Test D6: Team tree display
+  Affiliate with 3 legs, 2 levels deep
+  Expected: tree renders correctly, leg volumes shown, large leg identified
+
+Test D7: QVV capping warning
+  Affiliate whose large leg is being capped
+  Expected: warning message appears on team page
+
+Test D8: Tenant isolation
+  Two affiliates from different companies
+  Expected: each only sees their own company's data
+```
+
+---
+
+## P2-3. PHASE 2 DEPLOYMENT SEQUENCE
+
+1. **Simulator services + tests** → deploy, verify via artisan or API
+2. **Simulator Filament page** → deploy, verify admin can run simulations
+3. **Affiliate dashboard services** → deploy services only
+4. **Affiliate dashboard UI** → deploy Livewire views and routes
+5. **End-to-end testing** → full flow from simulation to affiliate view
+
+---
+
+## P2-4. PHASE 2 AGENT ASSIGNMENTS
+
+### AGENT 5: Scenario Simulator
+
+**Brief:** Build the scenario simulator as a standalone module.
+
+**Tasks:**
+1. Create SimulationConfig and SimulationResult DTOs
+2. Create simulation_runs migration and SimulationRun model
+3. Build NetworkGrowthProjector — generates synthetic tree growth day by day
+4. Build TransactionProjector — generates synthetic transactions from assumptions
+5. Build PayoutProjector — wraps Phase 1 calculators to run on synthetic data
+6. Build SimulatorReportBuilder — compiles daily projections into summary report
+7. Build SimulatorOrchestrator — coordinates full simulation run
+8. Add Filament custom page with input form and results display (charts, tables, cards)
+9. Add API endpoints for simulations
+10. Write tests for all scenarios S1-S7
+
+**Key constraint:** The simulator must reuse Phase 1 calculator services. Do NOT duplicate commission logic. The PayoutProjector wraps QualificationEvaluator, DirectCommissionCalculator, QvvCalculator, ViralCommissionCalculator, and CapEnforcer — it does not reimplement them.
+
+**Randomness:** Use a seeded random number generator (`mt_srand` with a configurable seed) so simulations are reproducible. Same config + same seed = identical results.
+
+### AGENT 6: Affiliate Dashboard
+
+**Brief:** Build the affiliate-facing self-service portal.
+
+**Tasks:**
+1. Install Livewire, set up Tailwind
+2. Create affiliate layout (app.blade.php with navigation)
+3. Create EnsureAffiliate middleware
+4. Set up affiliate routes and controllers
+5. Build AffiliateDashboardService, TierProgressService, TeamStatsService
+6. Build dashboard DTOs
+7. Build Livewire components:
+   - EarningsSummary (total earned, pending, wallet balance)
+   - TierProgress (progress bars, next tier requirements, delta messaging)
+   - QualificationStatus (active customers, referred volume)
+   - RecentActivity (last 10 commission entries)
+   - GenealogyTree (expandable tree view with leg volumes)
+   - LegHealthPanel (leg comparison with health labels and QVV warning)
+   - TeamStats (team size, active counts, team volume)
+   - CommissionHistory (paginated, filterable table)
+   - CommissionBreakdown (by type chart)
+   - WalletBalance (available, pending, total earned, total withdrawn)
+   - MovementHistory (paginated wallet movements)
+8. Build affiliate login page (scoped to company)
+9. Write tests for all scenarios D1-D8
+
+**Key constraint:** The dashboard is read-only. It displays data that the Phase 1 engine calculates. No business logic in Livewire components — they call services, services return DTOs, components render DTOs.
+
+---
+
+## P2-5. CLAUDE CODE PROMPTS
+
+### Prompt 3 — Simulator:
+
+> Read CLAUDE.md and PROJECT.md (including Phase 2 sections). Phase 1 is complete. Build Agent 5: the Scenario Simulator. Create the simulation_runs migration, SimulationConfig and SimulationResult DTOs, and all four simulator services (NetworkGrowthProjector, TransactionProjector, PayoutProjector, SimulatorReportBuilder, SimulatorOrchestrator). The PayoutProjector MUST reuse Phase 1 calculator services — do not duplicate commission logic. Use a seeded RNG for reproducibility. Build the Filament custom page with input form and chart-based results display. Add API endpoints. Write tests for scenarios S1-S7. Run all tests and fix failures.
+
+### Prompt 4 — Affiliate Dashboard:
+
+> Read CLAUDE.md and PROJECT.md (including Phase 2 sections). Phase 1 is complete. Build Agent 6: the Affiliate Dashboard. Install Livewire. Create the affiliate layout, routes, middleware, controllers, and all Livewire components specified in P2-2. Build AffiliateDashboardService, TierProgressService, and TeamStatsService with their DTOs. The dashboard is read-only — components call services, services return DTOs, components render. Build the affiliate login page scoped to company. Write tests for scenarios D1-D8. Run all tests and fix failures.
