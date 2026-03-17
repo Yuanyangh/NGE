@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\CompensationPlan;
 use App\Models\GenealogyNode;
 use App\Models\Transaction;
+use App\Scopes\CompanyScope;
 use App\Models\User;
 use App\Models\WalletAccount;
 use Carbon\Carbon;
@@ -111,7 +112,7 @@ abstract class CommissionTestCase extends TestCase
      */
     protected function nodeFor(User $user): GenealogyNode
     {
-        return GenealogyNode::withoutGlobalScopes()
+        return GenealogyNode::withoutGlobalScope(CompanyScope::class)
             ->where('user_id', $user->id)
             ->firstOrFail();
     }

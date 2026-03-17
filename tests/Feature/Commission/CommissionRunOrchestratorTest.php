@@ -4,6 +4,7 @@ namespace Tests\Feature\Commission;
 
 use App\Models\CommissionLedgerEntry;
 use App\Models\CommissionRun;
+use App\Scopes\CompanyScope;
 use App\Models\WalletMovement;
 use App\Services\Commission\CommissionRunOrchestrator;
 
@@ -41,7 +42,7 @@ class CommissionRunOrchestratorTest extends CommissionTestCase
         $this->assertEquals($run1Entries, $run2Entries);
 
         // Only 1 run record should exist
-        $this->assertEquals(1, CommissionRun::withoutGlobalScopes()
+        $this->assertEquals(1, CommissionRun::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $this->company->id)
             ->count());
     }
@@ -94,7 +95,7 @@ class CommissionRunOrchestratorTest extends CommissionTestCase
         $this->assertEquals('completed', $run->status);
 
         // Main affiliate should have at least some commission
-        $entries = CommissionLedgerEntry::withoutGlobalScopes()
+        $entries = CommissionLedgerEntry::withoutGlobalScope(CompanyScope::class)
             ->where('commission_run_id', $run->id)
             ->where('user_id', $affiliate->id)
             ->get();
@@ -119,13 +120,13 @@ class CommissionRunOrchestratorTest extends CommissionTestCase
         $walletService = app(\App\Services\Commission\WalletCreditService::class);
         $walletService->creditFromCommissions($this->company, $this->today);
 
-        $movementsBefore = WalletMovement::withoutGlobalScopes()->count();
+        $movementsBefore = WalletMovement::withoutGlobalScope(CompanyScope::class)->count();
 
         // Re-run commissions (should clean up old wallet movements)
         $this->orchestrator->run($this->company, $this->today);
 
         // Old wallet movements should be deleted
-        $movementsAfter = WalletMovement::withoutGlobalScopes()->count();
+        $movementsAfter = WalletMovement::withoutGlobalScope(CompanyScope::class)->count();
         $this->assertEquals(0, $movementsAfter);
     }
 

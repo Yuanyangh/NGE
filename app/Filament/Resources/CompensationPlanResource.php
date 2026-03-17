@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\CompensationPlanResource\Pages;
 use App\Models\CompensationPlan;
+use App\Scopes\CompanyScope;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -70,7 +71,7 @@ class CompensationPlanResource extends Resource
 
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
-        return parent::getEloquentQuery()->withoutGlobalScopes();
+        return parent::getEloquentQuery()->withoutGlobalScope(CompanyScope::class);
     }
 
     public static function getPages(): array

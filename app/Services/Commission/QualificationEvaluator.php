@@ -4,6 +4,7 @@ namespace App\Services\Commission;
 
 use App\DTOs\PlanConfig;
 use App\DTOs\QualificationResult;
+use App\Scopes\CompanyScope;
 use App\Models\Transaction;
 use App\Models\User;
 use Carbon\Carbon;
@@ -70,7 +71,7 @@ class QualificationEvaluator
         $minXp = $config->active_customer_min_order_xp;
 
         if ($config->active_customer_threshold_type === 'per_order') {
-            return Transaction::withoutGlobalScopes()
+            return Transaction::withoutGlobalScope(CompanyScope::class)
                 ->where('referred_by_user_id', $affiliate->id)
                 ->where('company_id', $affiliate->company_id)
                 ->where('status', 'confirmed')
@@ -83,7 +84,7 @@ class QualificationEvaluator
         }
 
         // cumulative_in_window: sum XP per user, count those >= threshold
-        return Transaction::withoutGlobalScopes()
+        return Transaction::withoutGlobalScope(CompanyScope::class)
             ->where('referred_by_user_id', $affiliate->id)
             ->where('company_id', $affiliate->company_id)
             ->where('status', 'confirmed')
@@ -99,7 +100,7 @@ class QualificationEvaluator
 
     public function sumReferredVolume(User $affiliate, Carbon $windowStart, Carbon $windowEnd): string
     {
-        $volume = Transaction::withoutGlobalScopes()
+        $volume = Transaction::withoutGlobalScope(CompanyScope::class)
             ->where('referred_by_user_id', $affiliate->id)
             ->where('company_id', $affiliate->company_id)
             ->where('status', 'confirmed')

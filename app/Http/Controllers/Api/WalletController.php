@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Scopes\CompanyScope;
 use App\Models\WalletAccount;
 use App\Models\WalletMovement;
 use Illuminate\Http\JsonResponse;
@@ -12,7 +13,7 @@ class WalletController extends Controller
 {
     public function show(User $user): JsonResponse
     {
-        $wallet = WalletAccount::withoutGlobalScopes()
+        $wallet = WalletAccount::withoutGlobalScope(CompanyScope::class)
             ->where('user_id', $user->id)
             ->first();
 
@@ -27,7 +28,7 @@ class WalletController extends Controller
             ]);
         }
 
-        $movements = WalletMovement::withoutGlobalScopes()
+        $movements = WalletMovement::withoutGlobalScope(CompanyScope::class)
             ->where('wallet_account_id', $wallet->id)
             ->orderByDesc('effective_at')
             ->limit(50)
@@ -36,7 +37,7 @@ class WalletController extends Controller
         return response()->json([
             'data' => [
                 'user_id' => $user->id,
-                'balance' => $wallet->balance(),
+                'balance' => $wallet->totalNonReversed(),
                 'currency' => $wallet->currency,
                 'movements' => $movements->map(fn ($m) => [
                     'id' => $m->id,

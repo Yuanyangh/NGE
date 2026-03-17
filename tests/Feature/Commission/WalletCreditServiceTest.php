@@ -3,6 +3,7 @@
 namespace Tests\Feature\Commission;
 
 use App\Models\WalletMovement;
+use App\Scopes\CompanyScope;
 use App\Services\Commission\CommissionRunOrchestrator;
 use App\Services\Commission\WalletCreditService;
 
@@ -59,12 +60,12 @@ class WalletCreditServiceTest extends CommissionTestCase
 
         // Verify wallet balance is derived from SUM
         $wallet = $affiliate->walletAccount;
-        $expectedBalance = WalletMovement::withoutGlobalScopes()
+        $expectedBalance = WalletMovement::withoutGlobalScope(CompanyScope::class)
             ->where('wallet_account_id', $wallet->id)
             ->where('status', '!=', 'reversed')
             ->sum('amount');
 
-        $this->assertCommissionEquals((string) $expectedBalance, $wallet->balance());
+        $this->assertCommissionEquals((string) $expectedBalance, $wallet->totalNonReversed());
 
         // Verify no mutable balance field — wallet_accounts table has no balance column
         $this->assertFalse(

@@ -4,6 +4,7 @@ namespace App\Services\Commission;
 
 use App\Models\CommissionLedgerEntry;
 use App\Models\Company;
+use App\Scopes\CompanyScope;
 use App\Models\WalletAccount;
 use App\Models\WalletMovement;
 use Carbon\Carbon;
@@ -27,7 +28,7 @@ class WalletCreditService
         DB::transaction(function () use ($company, $date, &$credited) {
             // Get all commission entries that need crediting
             // (affiliate + viral commissions with positive amounts, not yet credited)
-            $entries = CommissionLedgerEntry::withoutGlobalScopes()
+            $entries = CommissionLedgerEntry::withoutGlobalScope(CompanyScope::class)
                 ->where('company_id', $company->id)
                 ->whereIn('type', ['affiliate_commission', 'viral_commission'])
                 ->where('amount', '>', 0)
@@ -36,7 +37,7 @@ class WalletCreditService
 
             foreach ($entries as $entry) {
                 // Ensure wallet account exists
-                $walletAccount = WalletAccount::withoutGlobalScopes()
+                $walletAccount = WalletAccount::withoutGlobalScope(CompanyScope::class)
                     ->firstOrCreate(
                         [
                             'company_id' => $company->id,

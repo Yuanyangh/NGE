@@ -1,0 +1,1 @@
+@include('affiliate.layouts.app')

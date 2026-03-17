@@ -4,6 +4,7 @@ namespace App\Services\Commission;
 
 use App\DTOs\PlanConfig;
 use App\Models\CommissionLedgerEntry;
+use App\Scopes\CompanyScope;
 use App\Models\Transaction;
 use Carbon\Carbon;
 
@@ -113,7 +114,7 @@ class CapEnforcer
 
     private function getRollingCompanyVolume(int $companyId, Carbon $windowStart, Carbon $windowEnd): string
     {
-        $volume = Transaction::withoutGlobalScopes()
+        $volume = Transaction::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $companyId)
             ->where('status', 'confirmed')
             ->where('qualifies_for_commission', true)
@@ -126,7 +127,7 @@ class CapEnforcer
 
     private function getRollingViralCommissions(int $companyId, Carbon $windowStart, Carbon $windowEnd): string
     {
-        $total = CommissionLedgerEntry::withoutGlobalScopes()
+        $total = CommissionLedgerEntry::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $companyId)
             ->where('type', 'viral_commission')
             ->whereHas('commissionRun', function ($query) use ($windowStart, $windowEnd) {
@@ -140,7 +141,7 @@ class CapEnforcer
 
     private function getRollingAllCommissions(int $companyId, Carbon $windowStart, Carbon $windowEnd): string
     {
-        $total = CommissionLedgerEntry::withoutGlobalScopes()
+        $total = CommissionLedgerEntry::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $companyId)
             ->whereIn('type', ['affiliate_commission', 'viral_commission'])
             ->whereHas('commissionRun', function ($query) use ($windowStart, $windowEnd) {

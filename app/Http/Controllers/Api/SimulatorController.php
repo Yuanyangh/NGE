@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\DTOs\SimulationConfig;
 use App\Http\Controllers\Controller;
+use App\Scopes\CompanyScope;
 use App\Models\CompensationPlan;
 use App\Models\Company;
 use App\Models\SimulationRun;
@@ -29,7 +30,7 @@ class SimulatorController extends Controller
             'tree_shape' => 'required|array',
         ]);
 
-        $plan = CompensationPlan::withoutGlobalScopes()
+        $plan = CompensationPlan::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $company->id)
             ->findOrFail($request->input('compensation_plan_id'));
 
@@ -49,7 +50,7 @@ class SimulatorController extends Controller
 
     public function index(Company $company): JsonResponse
     {
-        $runs = SimulationRun::withoutGlobalScopes()
+        $runs = SimulationRun::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $company->id)
             ->orderByDesc('created_at')
             ->limit(50)

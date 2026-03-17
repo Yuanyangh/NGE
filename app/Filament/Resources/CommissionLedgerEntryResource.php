@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\CommissionLedgerEntryResource\Pages;
 use App\Models\CommissionLedgerEntry;
+use App\Scopes\CompanyScope;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -66,7 +67,7 @@ class CommissionLedgerEntryResource extends Resource
 
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
-        return parent::getEloquentQuery()->withoutGlobalScopes();
+        return parent::getEloquentQuery()->withoutGlobalScope(CompanyScope::class);
     }
 
     public static function getPages(): array

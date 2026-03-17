@@ -4,6 +4,7 @@ namespace App\Services\Commission;
 
 use App\DTOs\PlanConfig;
 use App\Models\GenealogyNode;
+use App\Scopes\CompanyScope;
 use App\Models\Transaction;
 use App\Models\User;
 use Carbon\Carbon;
@@ -21,7 +22,7 @@ class LegAggregator
         $windowStart = $date->copy()->subDays($config->rolling_days - 1);
 
         // Find the affiliate's genealogy node
-        $affiliateNode = GenealogyNode::withoutGlobalScopes()
+        $affiliateNode = GenealogyNode::withoutGlobalScope(CompanyScope::class)
             ->where('user_id', $affiliate->id)
             ->where('company_id', $affiliate->company_id)
             ->first();
@@ -31,7 +32,7 @@ class LegAggregator
         }
 
         // Get direct children (each child = one leg root)
-        $directChildren = GenealogyNode::withoutGlobalScopes()
+        $directChildren = GenealogyNode::withoutGlobalScope(CompanyScope::class)
             ->where('sponsor_id', $affiliateNode->id)
             ->where('company_id', $affiliate->company_id)
             ->get();
@@ -43,7 +44,7 @@ class LegAggregator
             $subtreeUserIds = $this->getSubtreeUserIds($childNode);
 
             // Sum all XP from confirmed qualifying transactions by users in this subtree
-            $volume = Transaction::withoutGlobalScopes()
+            $volume = Transaction::withoutGlobalScope(CompanyScope::class)
                 ->where('company_id', $affiliate->company_id)
                 ->whereIn('user_id', $subtreeUserIds)
                 ->where('status', 'confirmed')

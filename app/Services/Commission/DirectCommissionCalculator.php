@@ -4,6 +4,7 @@ namespace App\Services\Commission;
 
 use App\DTOs\PlanConfig;
 use App\Models\Transaction;
+use App\Scopes\CompanyScope;
 use App\Models\User;
 use Carbon\Carbon;
 
@@ -29,7 +30,7 @@ class DirectCommissionCalculator
 
     public function getTodaysNewVolume(User $affiliate, Carbon $date, PlanConfig $config): string
     {
-        $query = Transaction::withoutGlobalScopes()
+        $query = Transaction::withoutGlobalScope(CompanyScope::class)
             ->where('referred_by_user_id', $affiliate->id)
             ->where('company_id', $affiliate->company_id)
             ->where('status', 'confirmed')

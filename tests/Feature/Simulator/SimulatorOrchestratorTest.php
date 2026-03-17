@@ -3,6 +3,7 @@
 namespace Tests\Feature\Simulator;
 
 use App\Models\SimulationRun;
+use App\Scopes\CompanyScope;
 use App\Services\Simulator\SimulatorOrchestrator;
 
 class SimulatorOrchestratorTest extends SimulatorTestCase
@@ -238,7 +239,7 @@ class SimulatorOrchestratorTest extends SimulatorTestCase
         );
 
         // Both should be persisted
-        $this->assertEquals(2, SimulationRun::withoutGlobalScopes()
+        $this->assertEquals(2, SimulationRun::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $this->company->id)
             ->where('status', 'completed')
             ->count()

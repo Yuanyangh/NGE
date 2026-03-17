@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\CommissionLedgerEntry;
+use App\Scopes\CompanyScope;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 
@@ -11,7 +12,7 @@ class CommissionHistoryController extends Controller
 {
     public function show(User $user): JsonResponse
     {
-        $entries = CommissionLedgerEntry::withoutGlobalScopes()
+        $entries = CommissionLedgerEntry::withoutGlobalScope(CompanyScope::class)
             ->where('user_id', $user->id)
             ->whereIn('type', ['affiliate_commission', 'viral_commission'])
             ->with('commissionRun:id,run_date,status')

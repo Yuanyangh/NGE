@@ -19,7 +19,7 @@ class ViewWalletAccount extends ViewRecord
             Infolists\Components\TextEntry::make('user.email')->label('Email'),
             Infolists\Components\TextEntry::make('currency'),
             Infolists\Components\TextEntry::make('balance')
-                ->getStateUsing(fn ($record) => $record->balance())
+                ->getStateUsing(fn ($record) => $record->totalNonReversed())
                 ->label('Current Balance'),
         ]);
     }

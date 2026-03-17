@@ -35,10 +35,23 @@ class WalletAccount extends Model
         return $this->hasMany(WalletMovement::class);
     }
 
-    public function balance(): string
+    /**
+     * Sum of all non-reversed movements (pending + approved + released).
+     */
+    public function totalNonReversed(): string
     {
-        return $this->movements()
+        return (string) $this->movements()
             ->where('status', '!=', 'reversed')
+            ->sum('amount');
+    }
+
+    /**
+     * Available balance: only approved + released movements.
+     */
+    public function availableBalance(): string
+    {
+        return (string) $this->movements()
+            ->whereIn('status', ['approved', 'released'])
             ->sum('amount');
     }
 }

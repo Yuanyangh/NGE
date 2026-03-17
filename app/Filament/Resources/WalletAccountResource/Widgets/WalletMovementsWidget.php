@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\WalletAccountResource\Widgets;
 
 use App\Models\WalletMovement;
+use App\Scopes\CompanyScope;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
@@ -19,7 +20,7 @@ class WalletMovementsWidget extends BaseWidget
     {
         return $table
             ->query(
-                WalletMovement::withoutGlobalScopes()
+                WalletMovement::withoutGlobalScope(CompanyScope::class)
                     ->where('wallet_account_id', $this->record->id)
                     ->orderByDesc('effective_at')
             )

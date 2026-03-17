@@ -2,20 +2,29 @@
 
 namespace Database\Seeders;
 
+use App\Models\CommissionLedgerEntry;
+use App\Models\CommissionRun;
+use App\Scopes\CompanyScope;
 use App\Models\Company;
 use App\Models\CompensationPlan;
 use App\Models\GenealogyNode;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\WalletAccount;
+use App\Models\WalletMovement;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 
 class SoCommSeeder extends Seeder
 {
+    private Company $company;
+    private CompensationPlan $plan;
+    private array $users = [];
+    private array $nodes = [];
+
     public function run(): void
     {
-        $company = Company::create([
+        $this->company = Company::create([
             'name' => 'SoComm',
             'slug' => 'socomm',
             'timezone' => 'UTC',
@@ -23,8 +32,8 @@ class SoCommSeeder extends Seeder
             'is_active' => true,
         ]);
 
-        CompensationPlan::create([
-            'company_id' => $company->id,
+        $this->plan = CompensationPlan::create([
+            'company_id' => $this->company->id,
             'name' => 'SoComm Affiliate Rewards Program',
             'version' => '1.0',
             'config' => $this->soCommConfig(),
@@ -33,175 +42,222 @@ class SoCommSeeder extends Seeder
             'is_active' => true,
         ]);
 
-        $users = $this->createUsers($company);
-        $this->createGenealogyTree($company, $users);
-        $this->createTransactions($company, $users);
-        $this->createWalletAccounts($company, $users);
+        $this->createUsers();
+        $this->createGenealogyTree();
+        $this->createTransactions();
+        $this->createWalletAccounts();
+        $this->createCommissionHistory();
     }
 
-    private function createUsers(Company $company): array
+    private function createUsers(): void
     {
         $userData = [
             // Admin
-            ['name' => 'Admin User', 'email' => 'admin@socomm.test', 'role' => 'admin'],
+            ['name' => 'Admin User', 'email' => 'admin@socomm.test', 'role' => 'admin', 'months_ago' => 12],
 
-            // Top-level affiliates (sponsors)
-            ['name' => 'Alice Johnson', 'email' => 'alice@socomm.test', 'role' => 'affiliate'],
-            ['name' => 'Bob Smith', 'email' => 'bob@socomm.test', 'role' => 'affiliate'],
+            // ===== TOP-LEVEL AFFILIATES =====
+            ['name' => 'Alice Johnson', 'email' => 'alice@socomm.test', 'role' => 'affiliate', 'months_ago' => 10],
+            ['name' => 'Bob Smith', 'email' => 'bob@socomm.test', 'role' => 'affiliate', 'months_ago' => 8],
 
-            // Alice's direct referrals (her legs)
-            ['name' => 'Charlie Brown', 'email' => 'charlie@socomm.test', 'role' => 'affiliate'],   // Leg 1 root
-            ['name' => 'Diana Prince', 'email' => 'diana@socomm.test', 'role' => 'affiliate'],      // Leg 2 root
-            ['name' => 'Eve Wilson', 'email' => 'eve@socomm.test', 'role' => 'affiliate'],           // Leg 3 root
+            // ===== ALICE'S NETWORK (3 legs, deep tree) =====
+            // Leg 1: Charlie's branch (strong leg)
+            ['name' => 'Charlie Brown', 'email' => 'charlie@socomm.test', 'role' => 'affiliate', 'months_ago' => 9],
+            ['name' => 'Frank Miller', 'email' => 'frank@socomm.test', 'role' => 'affiliate', 'months_ago' => 7],
+            ['name' => 'Grace Lee', 'email' => 'grace@socomm.test', 'role' => 'customer', 'months_ago' => 6],
+            ['name' => 'Hank Davis', 'email' => 'hank@socomm.test', 'role' => 'customer', 'months_ago' => 5],
+            ['name' => 'Ivy Chen', 'email' => 'ivy@socomm.test', 'role' => 'customer', 'months_ago' => 5],
+            ['name' => 'Tina Walker', 'email' => 'tina@socomm.test', 'role' => 'customer', 'months_ago' => 4],
+            // Frank's sub-affiliates (depth 4)
+            ['name' => 'Nancy Green', 'email' => 'nancy@socomm.test', 'role' => 'affiliate', 'months_ago' => 4],
+            ['name' => 'Oscar White', 'email' => 'oscar@socomm.test', 'role' => 'customer', 'months_ago' => 3],
+            ['name' => 'Pam Red', 'email' => 'pam@socomm.test', 'role' => 'customer', 'months_ago' => 3],
+            // Nancy's downline (depth 5)
+            ['name' => 'Will Turner', 'email' => 'will@socomm.test', 'role' => 'customer', 'months_ago' => 2],
+            ['name' => 'Xena Warrior', 'email' => 'xena@socomm.test', 'role' => 'customer', 'months_ago' => 2],
 
-            // Charlie's downline (Alice's Leg 1 depth)
-            ['name' => 'Frank Miller', 'email' => 'frank@socomm.test', 'role' => 'affiliate'],
-            ['name' => 'Grace Lee', 'email' => 'grace@socomm.test', 'role' => 'customer'],
+            // Leg 2: Diana's branch (moderate leg)
+            ['name' => 'Diana Prince', 'email' => 'diana@socomm.test', 'role' => 'affiliate', 'months_ago' => 8],
+            ['name' => 'Jack Taylor', 'email' => 'jack@socomm.test', 'role' => 'affiliate', 'months_ago' => 6],
+            ['name' => 'Karen White', 'email' => 'karen@socomm.test', 'role' => 'customer', 'months_ago' => 5],
+            ['name' => 'Uma Hall', 'email' => 'uma@socomm.test', 'role' => 'customer', 'months_ago' => 4],
+            // Jack's customers
+            ['name' => 'Yuri Gagarin', 'email' => 'yuri@socomm.test', 'role' => 'customer', 'months_ago' => 3],
+            ['name' => 'Zoe Quinn', 'email' => 'zoe@socomm.test', 'role' => 'customer', 'months_ago' => 2],
 
-            // Frank's downline (Alice's Leg 1, depth 3)
-            ['name' => 'Hank Davis', 'email' => 'hank@socomm.test', 'role' => 'customer'],
-            ['name' => 'Ivy Chen', 'email' => 'ivy@socomm.test', 'role' => 'customer'],
+            // Leg 3: Eve's branch (weaker leg)
+            ['name' => 'Eve Wilson', 'email' => 'eve@socomm.test', 'role' => 'affiliate', 'months_ago' => 7],
+            ['name' => 'Leo Martinez', 'email' => 'leo@socomm.test', 'role' => 'customer', 'months_ago' => 5],
+            ['name' => 'Victor King', 'email' => 'victor@socomm.test', 'role' => 'customer', 'months_ago' => 4],
 
-            // Diana's downline (Alice's Leg 2 depth)
-            ['name' => 'Jack Taylor', 'email' => 'jack@socomm.test', 'role' => 'affiliate'],
-            ['name' => 'Karen White', 'email' => 'karen@socomm.test', 'role' => 'customer'],
+            // Alice's direct customers (not part of any leg subtree)
+            ['name' => 'Quinn Robinson', 'email' => 'quinn@socomm.test', 'role' => 'customer', 'months_ago' => 6],
+            ['name' => 'Rachel Clark', 'email' => 'rachel@socomm.test', 'role' => 'customer', 'months_ago' => 5],
+            ['name' => 'Stella Nova', 'email' => 'stella@socomm.test', 'role' => 'customer', 'months_ago' => 3],
+            ['name' => 'Tom Hardy', 'email' => 'tom@socomm.test', 'role' => 'customer', 'months_ago' => 2],
 
-            // Eve's downline (Alice's Leg 3 depth)
-            ['name' => 'Leo Martinez', 'email' => 'leo@socomm.test', 'role' => 'customer'],
+            // ===== BOB'S NETWORK (2 legs) =====
+            // Leg 1: Mia's branch
+            ['name' => 'Mia Anderson', 'email' => 'mia@socomm.test', 'role' => 'affiliate', 'months_ago' => 7],
+            ['name' => 'Olivia Jackson', 'email' => 'olivia@socomm.test', 'role' => 'customer', 'months_ago' => 5],
+            ['name' => 'Peter Harris', 'email' => 'peter@socomm.test', 'role' => 'customer', 'months_ago' => 4],
+            // Mia's sub-affiliate
+            ['name' => 'Rita Moreno', 'email' => 'rita@socomm.test', 'role' => 'affiliate', 'months_ago' => 3],
+            ['name' => 'Saul Goodman', 'email' => 'saul@socomm.test', 'role' => 'customer', 'months_ago' => 2],
+            ['name' => 'Ursula Major', 'email' => 'ursula@socomm.test', 'role' => 'customer', 'months_ago' => 2],
 
-            // Bob's direct referrals
-            ['name' => 'Mia Anderson', 'email' => 'mia@socomm.test', 'role' => 'affiliate'],
-            ['name' => 'Noah Thomas', 'email' => 'noah@socomm.test', 'role' => 'customer'],
+            // Leg 2: Noah
+            ['name' => 'Noah Thomas', 'email' => 'noah@socomm.test', 'role' => 'customer', 'months_ago' => 6],
+            ['name' => 'Sam Lewis', 'email' => 'sam@socomm.test', 'role' => 'customer', 'months_ago' => 5],
 
-            // Mia's downline
-            ['name' => 'Olivia Jackson', 'email' => 'olivia@socomm.test', 'role' => 'customer'],
-            ['name' => 'Peter Harris', 'email' => 'peter@socomm.test', 'role' => 'customer'],
-
-            // Standalone customers referred by various affiliates
-            ['name' => 'Quinn Robinson', 'email' => 'quinn@socomm.test', 'role' => 'customer'],
-            ['name' => 'Rachel Clark', 'email' => 'rachel@socomm.test', 'role' => 'customer'],
-            ['name' => 'Sam Lewis', 'email' => 'sam@socomm.test', 'role' => 'customer'],
-            ['name' => 'Tina Walker', 'email' => 'tina@socomm.test', 'role' => 'customer'],
-            ['name' => 'Uma Hall', 'email' => 'uma@socomm.test', 'role' => 'customer'],
-            ['name' => 'Victor King', 'email' => 'victor@socomm.test', 'role' => 'customer'],
+            // ===== ADDITIONAL AFFILIATES FOR TREE DEPTH =====
+            ['name' => 'Dave Grohl', 'email' => 'dave@socomm.test', 'role' => 'affiliate', 'months_ago' => 6],
+            ['name' => 'Fiona Apple', 'email' => 'fiona@socomm.test', 'role' => 'customer', 'months_ago' => 4],
+            ['name' => 'George Lucas', 'email' => 'george@socomm.test', 'role' => 'customer', 'months_ago' => 3],
+            ['name' => 'Hannah Montana', 'email' => 'hannah@socomm.test', 'role' => 'customer', 'months_ago' => 2],
+            ['name' => 'Ivan Drago', 'email' => 'ivan@socomm.test', 'role' => 'customer', 'months_ago' => 1],
         ];
 
-        $users = [];
         foreach ($userData as $data) {
-            $users[$data['email']] = User::create([
-                'company_id' => $company->id,
+            $this->users[$data['email']] = User::create([
+                'company_id' => $this->company->id,
                 'name' => $data['name'],
                 'email' => $data['email'],
                 'password' => 'password',
                 'role' => $data['role'],
                 'status' => 'active',
-                'enrolled_at' => $data['role'] === 'affiliate' ? now()->subMonths(rand(2, 6)) : null,
+                'enrolled_at' => now()->subMonths($data['months_ago']),
             ]);
         }
-
-        return $users;
     }
 
-    private function createGenealogyTree(Company $company, array $users): void
+    private function createGenealogyTree(): void
     {
-        $makeNode = function (User $user, ?GenealogyNode $sponsor, int $depth) use ($company): GenealogyNode {
-            return GenealogyNode::create([
-                'company_id' => $company->id,
-                'user_id' => $user->id,
+        $make = function (string $email, ?string $sponsorEmail, int $depth): void {
+            $sponsor = $sponsorEmail ? ($this->nodes[$sponsorEmail] ?? null) : null;
+            $this->nodes[$email] = GenealogyNode::create([
+                'company_id' => $this->company->id,
+                'user_id' => $this->users[$email]->id,
                 'sponsor_id' => $sponsor?->id,
                 'tree_depth' => $depth,
             ]);
         };
 
-        // Level 0: Top-level (no sponsor)
-        $adminNode   = $makeNode($users['admin@socomm.test'], null, 0);
-        $aliceNode   = $makeNode($users['alice@socomm.test'], null, 0);
-        $bobNode     = $makeNode($users['bob@socomm.test'], null, 0);
+        // Top level
+        $make('admin@socomm.test', null, 0);
+        $make('alice@socomm.test', null, 0);
+        $make('bob@socomm.test', null, 0);
 
-        // Level 1: Alice's direct referrals (3 legs)
-        $charlieNode = $makeNode($users['charlie@socomm.test'], $aliceNode, 1);
-        $dianaNode   = $makeNode($users['diana@socomm.test'], $aliceNode, 1);
-        $eveNode     = $makeNode($users['eve@socomm.test'], $aliceNode, 1);
+        // Alice's 3 legs
+        $make('charlie@socomm.test', 'alice@socomm.test', 1);
+        $make('diana@socomm.test', 'alice@socomm.test', 1);
+        $make('eve@socomm.test', 'alice@socomm.test', 1);
+        // Alice's direct customers
+        $make('quinn@socomm.test', 'alice@socomm.test', 1);
+        $make('rachel@socomm.test', 'alice@socomm.test', 1);
+        $make('stella@socomm.test', 'alice@socomm.test', 1);
+        $make('tom@socomm.test', 'alice@socomm.test', 1);
 
-        // Level 2: Charlie's downline (Alice Leg 1)
-        $frankNode   = $makeNode($users['frank@socomm.test'], $charlieNode, 2);
-        $graceNode   = $makeNode($users['grace@socomm.test'], $charlieNode, 2);
+        // Charlie's downline (Alice Leg 1)
+        $make('frank@socomm.test', 'charlie@socomm.test', 2);
+        $make('grace@socomm.test', 'charlie@socomm.test', 2);
+        $make('tina@socomm.test', 'charlie@socomm.test', 2);
 
-        // Level 3: Frank's downline (Alice Leg 1, deep)
-        $hankNode    = $makeNode($users['hank@socomm.test'], $frankNode, 3);
-        $ivyNode     = $makeNode($users['ivy@socomm.test'], $frankNode, 3);
+        // Frank's downline (depth 3)
+        $make('hank@socomm.test', 'frank@socomm.test', 3);
+        $make('ivy@socomm.test', 'frank@socomm.test', 3);
+        $make('nancy@socomm.test', 'frank@socomm.test', 3);
+        $make('oscar@socomm.test', 'frank@socomm.test', 3);
+        $make('pam@socomm.test', 'frank@socomm.test', 3);
 
-        // Level 2: Diana's downline (Alice Leg 2)
-        $jackNode    = $makeNode($users['jack@socomm.test'], $dianaNode, 2);
-        $karenNode   = $makeNode($users['karen@socomm.test'], $dianaNode, 2);
+        // Nancy's downline (depth 4)
+        $make('will@socomm.test', 'nancy@socomm.test', 4);
+        $make('xena@socomm.test', 'nancy@socomm.test', 4);
 
-        // Level 2: Eve's downline (Alice Leg 3)
-        $leoNode     = $makeNode($users['leo@socomm.test'], $eveNode, 2);
+        // Diana's downline (Alice Leg 2)
+        $make('jack@socomm.test', 'diana@socomm.test', 2);
+        $make('karen@socomm.test', 'diana@socomm.test', 2);
+        $make('uma@socomm.test', 'diana@socomm.test', 2);
 
-        // Level 1: Bob's direct referrals
-        $miaNode     = $makeNode($users['mia@socomm.test'], $bobNode, 1);
-        $noahNode    = $makeNode($users['noah@socomm.test'], $bobNode, 1);
+        // Jack's customers
+        $make('yuri@socomm.test', 'jack@socomm.test', 3);
+        $make('zoe@socomm.test', 'jack@socomm.test', 3);
 
-        // Level 2: Mia's downline
-        $oliviaNode  = $makeNode($users['olivia@socomm.test'], $miaNode, 2);
-        $peterNode   = $makeNode($users['peter@socomm.test'], $miaNode, 2);
+        // Eve's downline (Alice Leg 3)
+        $make('leo@socomm.test', 'eve@socomm.test', 2);
+        $make('victor@socomm.test', 'eve@socomm.test', 2);
 
-        // Standalone customers referred by various affiliates
-        $makeNode($users['quinn@socomm.test'], $aliceNode, 1);
-        $makeNode($users['rachel@socomm.test'], $aliceNode, 1);
-        $makeNode($users['sam@socomm.test'], $bobNode, 1);
-        $makeNode($users['tina@socomm.test'], $charlieNode, 2);
-        $makeNode($users['uma@socomm.test'], $dianaNode, 2);
-        $makeNode($users['victor@socomm.test'], $eveNode, 2);
+        // Bob's legs
+        $make('mia@socomm.test', 'bob@socomm.test', 1);
+        $make('noah@socomm.test', 'bob@socomm.test', 1);
+        $make('sam@socomm.test', 'bob@socomm.test', 1);
+
+        // Mia's downline
+        $make('olivia@socomm.test', 'mia@socomm.test', 2);
+        $make('peter@socomm.test', 'mia@socomm.test', 2);
+        $make('rita@socomm.test', 'mia@socomm.test', 2);
+
+        // Rita's customers
+        $make('saul@socomm.test', 'rita@socomm.test', 3);
+        $make('ursula@socomm.test', 'rita@socomm.test', 3);
+
+        // Dave under Jack (extends Diana's leg deeper)
+        $make('dave@socomm.test', 'jack@socomm.test', 3);
+        $make('fiona@socomm.test', 'dave@socomm.test', 4);
+        $make('george@socomm.test', 'dave@socomm.test', 4);
+        $make('hannah@socomm.test', 'dave@socomm.test', 4);
+        $make('ivan@socomm.test', 'dave@socomm.test', 4);
     }
 
-    private function createTransactions(Company $company, array $users): void
+    private function createTransactions(): void
     {
         $today = Carbon::today();
 
-        // Helper to get the sponsor (referred_by) for a user based on genealogy
+        // Build sponsor map from tree for referred_by_user_id
         $sponsorMap = [
-            // Alice's direct referrals — referred_by = Alice
             'charlie@socomm.test' => 'alice@socomm.test',
             'diana@socomm.test'   => 'alice@socomm.test',
             'eve@socomm.test'     => 'alice@socomm.test',
             'quinn@socomm.test'   => 'alice@socomm.test',
             'rachel@socomm.test'  => 'alice@socomm.test',
-
-            // Charlie's referrals
+            'stella@socomm.test'  => 'alice@socomm.test',
+            'tom@socomm.test'     => 'alice@socomm.test',
             'frank@socomm.test'   => 'charlie@socomm.test',
             'grace@socomm.test'   => 'charlie@socomm.test',
             'tina@socomm.test'    => 'charlie@socomm.test',
-
-            // Frank's referrals
             'hank@socomm.test'    => 'frank@socomm.test',
             'ivy@socomm.test'     => 'frank@socomm.test',
-
-            // Diana's referrals
+            'nancy@socomm.test'   => 'frank@socomm.test',
+            'oscar@socomm.test'   => 'frank@socomm.test',
+            'pam@socomm.test'     => 'frank@socomm.test',
+            'will@socomm.test'    => 'nancy@socomm.test',
+            'xena@socomm.test'    => 'nancy@socomm.test',
             'jack@socomm.test'    => 'diana@socomm.test',
             'karen@socomm.test'   => 'diana@socomm.test',
             'uma@socomm.test'     => 'diana@socomm.test',
-
-            // Eve's referrals
+            'yuri@socomm.test'    => 'jack@socomm.test',
+            'zoe@socomm.test'     => 'jack@socomm.test',
             'leo@socomm.test'     => 'eve@socomm.test',
             'victor@socomm.test'  => 'eve@socomm.test',
-
-            // Bob's referrals
             'mia@socomm.test'     => 'bob@socomm.test',
             'noah@socomm.test'    => 'bob@socomm.test',
             'sam@socomm.test'     => 'bob@socomm.test',
-
-            // Mia's referrals
             'olivia@socomm.test'  => 'mia@socomm.test',
             'peter@socomm.test'   => 'mia@socomm.test',
+            'rita@socomm.test'    => 'mia@socomm.test',
+            'saul@socomm.test'    => 'rita@socomm.test',
+            'ursula@socomm.test'  => 'rita@socomm.test',
+            'dave@socomm.test'    => 'jack@socomm.test',
+            'fiona@socomm.test'   => 'dave@socomm.test',
+            'george@socomm.test'  => 'dave@socomm.test',
+            'hannah@socomm.test'  => 'dave@socomm.test',
+            'ivan@socomm.test'    => 'dave@socomm.test',
         ];
 
-        $txn = function (string $buyerEmail, int $daysAgo, float $xp, string $type = 'purchase') use ($company, $users, $sponsorMap) {
-            $buyer = $users[$buyerEmail];
-            $referrer = isset($sponsorMap[$buyerEmail]) ? $users[$sponsorMap[$buyerEmail]] : null;
-
+        $txn = function (string $email, int $daysAgo, float $xp, string $type = 'purchase') use ($sponsorMap) {
+            $buyer = $this->users[$email];
+            $referrer = isset($sponsorMap[$email]) ? $this->users[$sponsorMap[$email]] : null;
             Transaction::create([
-                'company_id' => $company->id,
+                'company_id' => $this->company->id,
                 'user_id' => $buyer->id,
                 'referred_by_user_id' => $referrer?->id,
                 'type' => $type,
@@ -211,91 +267,186 @@ class SoCommSeeder extends Seeder
                 'status' => 'confirmed',
                 'qualifies_for_commission' => true,
                 'transaction_date' => Carbon::today()->subDays($daysAgo),
-                'reference' => 'SEED-' . $buyer->id . '-' . $daysAgo,
+                'reference' => 'SEED-' . $buyer->id . '-' . $daysAgo . '-' . $type,
             ]);
         };
 
-        // === Alice's referred customers — spread across 30-day window ===
-        // Charlie (affiliate, Leg 1 root) — multiple orders
-        $txn('charlie@socomm.test', 0, 50);    // Today
+        // ===== ALICE'S REFERRED CUSTOMERS - Heavy volume =====
+        // Charlie (Leg 1 root)
+        $txn('charlie@socomm.test', 0, 50);
+        $txn('charlie@socomm.test', 5, 65);
         $txn('charlie@socomm.test', 10, 80);
         $txn('charlie@socomm.test', 20, 60);
+        $txn('charlie@socomm.test', 28, 45);
 
-        // Diana (affiliate, Leg 2 root)
-        $txn('diana@socomm.test', 3, 40);
+        // Diana (Leg 2 root)
+        $txn('diana@socomm.test', 1, 40);
+        $txn('diana@socomm.test', 8, 55);
         $txn('diana@socomm.test', 15, 70);
+        $txn('diana@socomm.test', 22, 35);
 
-        // Eve (affiliate, Leg 3 root)
-        $txn('eve@socomm.test', 5, 30);
+        // Eve (Leg 3 root)
+        $txn('eve@socomm.test', 3, 30);
+        $txn('eve@socomm.test', 12, 45);
         $txn('eve@socomm.test', 25, 50);
 
-        // Quinn (customer, direct referral of Alice)
+        // Quinn
         $txn('quinn@socomm.test', 2, 25);
         $txn('quinn@socomm.test', 12, 35);
+        $txn('quinn@socomm.test', 19, 30);
 
-        // Rachel (customer, direct referral of Alice)
-        $txn('rachel@socomm.test', 7, 45);
+        // Rachel
+        $txn('rachel@socomm.test', 4, 45);
+        $txn('rachel@socomm.test', 14, 40);
 
-        // === Leg 1 deep volume (Charlie's subtree) ===
-        // Frank's purchases (referred by Charlie)
-        $txn('frank@socomm.test', 1, 100);
+        // Stella
+        $txn('stella@socomm.test', 1, 55);
+        $txn('stella@socomm.test', 9, 30);
+
+        // Tom
+        $txn('tom@socomm.test', 0, 35);
+        $txn('tom@socomm.test', 7, 28);
+
+        // ===== LEG 1 DEEP VOLUME (Charlie's subtree) =====
+        // Frank (referred by Charlie)
+        $txn('frank@socomm.test', 0, 100);
+        $txn('frank@socomm.test', 7, 85);
         $txn('frank@socomm.test', 14, 75);
+        $txn('frank@socomm.test', 21, 90);
 
-        // Grace's purchases (referred by Charlie)
-        $txn('grace@socomm.test', 4, 30);
+        // Grace (referred by Charlie)
+        $txn('grace@socomm.test', 2, 30);
+        $txn('grace@socomm.test', 11, 25);
 
-        // Tina's purchases (referred by Charlie)
-        $txn('tina@socomm.test', 8, 25);
+        // Tina (referred by Charlie)
+        $txn('tina@socomm.test', 5, 25);
+        $txn('tina@socomm.test', 18, 35);
 
-        // Hank's purchases (referred by Frank, deep in Leg 1)
-        $txn('hank@socomm.test', 3, 50);
+        // Hank (referred by Frank)
+        $txn('hank@socomm.test', 1, 50);
+        $txn('hank@socomm.test', 9, 45);
         $txn('hank@socomm.test', 18, 40);
 
-        // Ivy's purchases (referred by Frank, deep in Leg 1)
-        $txn('ivy@socomm.test', 6, 35);
+        // Ivy (referred by Frank)
+        $txn('ivy@socomm.test', 3, 35);
+        $txn('ivy@socomm.test', 15, 30);
 
-        // === Leg 2 volume (Diana's subtree) ===
-        // Jack's purchases (referred by Diana)
-        $txn('jack@socomm.test', 2, 60);
+        // Nancy (referred by Frank) - sub-affiliate with own team
+        $txn('nancy@socomm.test', 2, 60);
+        $txn('nancy@socomm.test', 10, 50);
+
+        // Oscar (referred by Frank)
+        $txn('oscar@socomm.test', 4, 40);
+        $txn('oscar@socomm.test', 16, 30);
+
+        // Pam (referred by Frank)
+        $txn('pam@socomm.test', 6, 25);
+
+        // Will (referred by Nancy, depth 5)
+        $txn('will@socomm.test', 3, 45);
+        $txn('will@socomm.test', 13, 35);
+
+        // Xena (referred by Nancy, depth 5)
+        $txn('xena@socomm.test', 5, 30);
+        $txn('xena@socomm.test', 17, 25);
+
+        // ===== LEG 2 VOLUME (Diana's subtree) =====
+        // Jack (referred by Diana)
+        $txn('jack@socomm.test', 1, 60);
+        $txn('jack@socomm.test', 10, 55);
         $txn('jack@socomm.test', 22, 45);
 
-        // Karen's purchases (referred by Diana)
-        $txn('karen@socomm.test', 9, 30);
+        // Karen (referred by Diana)
+        $txn('karen@socomm.test', 3, 30);
+        $txn('karen@socomm.test', 14, 25);
 
-        // Uma's purchases (referred by Diana)
-        $txn('uma@socomm.test', 11, 40);
+        // Uma (referred by Diana)
+        $txn('uma@socomm.test', 6, 40);
+        $txn('uma@socomm.test', 20, 35);
 
-        // === Leg 3 volume (Eve's subtree) ===
-        // Leo's purchases (referred by Eve)
-        $txn('leo@socomm.test', 4, 25);
+        // Yuri (referred by Jack)
+        $txn('yuri@socomm.test', 2, 35);
+        $txn('yuri@socomm.test', 11, 30);
 
-        // Victor's purchases (referred by Eve)
-        $txn('victor@socomm.test', 13, 20);
+        // Zoe (referred by Jack)
+        $txn('zoe@socomm.test', 4, 25);
+        $txn('zoe@socomm.test', 15, 20);
 
-        // === Bob's referred customers ===
-        $txn('mia@socomm.test', 1, 60);
+        // Dave (referred by Jack, sub-affiliate)
+        $txn('dave@socomm.test', 1, 70);
+        $txn('dave@socomm.test', 8, 55);
+        $txn('dave@socomm.test', 16, 45);
+
+        // Fiona (referred by Dave)
+        $txn('fiona@socomm.test', 3, 30);
+        $txn('fiona@socomm.test', 12, 25);
+
+        // George (referred by Dave)
+        $txn('george@socomm.test', 5, 35);
+
+        // Hannah (referred by Dave)
+        $txn('hannah@socomm.test', 7, 28);
+
+        // Ivan (referred by Dave)
+        $txn('ivan@socomm.test', 2, 40);
+
+        // ===== LEG 3 VOLUME (Eve's subtree) =====
+        // Leo (referred by Eve)
+        $txn('leo@socomm.test', 2, 25);
+        $txn('leo@socomm.test', 13, 20);
+
+        // Victor (referred by Eve)
+        $txn('victor@socomm.test', 8, 22);
+
+        // ===== BOB'S NETWORK =====
+        $txn('mia@socomm.test', 0, 60);
+        $txn('mia@socomm.test', 6, 55);
         $txn('mia@socomm.test', 16, 40);
-        $txn('noah@socomm.test', 5, 30);
-        $txn('sam@socomm.test', 8, 25);
 
-        // === Mia's referred customers ===
-        $txn('olivia@socomm.test', 3, 35);
-        $txn('peter@socomm.test', 7, 40);
+        $txn('noah@socomm.test', 2, 30);
+        $txn('noah@socomm.test', 14, 25);
 
-        // === SmartShip orders ===
+        $txn('sam@socomm.test', 4, 25);
+        $txn('sam@socomm.test', 11, 35);
+
+        // Mia's referrals
+        $txn('olivia@socomm.test', 1, 35);
+        $txn('olivia@socomm.test', 10, 30);
+
+        $txn('peter@socomm.test', 3, 40);
+        $txn('peter@socomm.test', 15, 35);
+
+        $txn('rita@socomm.test', 2, 50);
+        $txn('rita@socomm.test', 9, 45);
+
+        // Rita's referrals
+        $txn('saul@socomm.test', 4, 30);
+        $txn('saul@socomm.test', 12, 25);
+
+        $txn('ursula@socomm.test', 6, 35);
+        $txn('ursula@socomm.test', 18, 28);
+
+        // ===== SMARTSHIP ORDERS =====
         $txn('charlie@socomm.test', 0, 30, 'smartship');
         $txn('diana@socomm.test', 0, 30, 'smartship');
         $txn('frank@socomm.test', 0, 30, 'smartship');
+        $txn('mia@socomm.test', 0, 30, 'smartship');
+        $txn('nancy@socomm.test', 0, 30, 'smartship');
+        $txn('jack@socomm.test', 0, 30, 'smartship');
+        $txn('dave@socomm.test', 0, 30, 'smartship');
+        $txn('rita@socomm.test', 0, 30, 'smartship');
+        $txn('eve@socomm.test', 0, 25, 'smartship');
 
-        // === Affiliate self-purchases (do NOT earn them commission, but count for sponsor) ===
-        $txn('alice@socomm.test', 0, 50);   // No referrer for Alice (top-level)
-        $txn('bob@socomm.test', 0, 40);     // No referrer for Bob (top-level)
+        // ===== SELF-PURCHASES (no referrer for top-level) =====
+        $txn('alice@socomm.test', 0, 50);
+        $txn('bob@socomm.test', 0, 40);
 
-        // === Transactions outside the window (should NOT count) ===
+        // ===== EDGE CASES =====
+        // Old transaction (outside 30-day window — should NOT count)
         Transaction::create([
-            'company_id' => $company->id,
-            'user_id' => $users['charlie@socomm.test']->id,
-            'referred_by_user_id' => $users['alice@socomm.test']->id,
+            'company_id' => $this->company->id,
+            'user_id' => $this->users['charlie@socomm.test']->id,
+            'referred_by_user_id' => $this->users['alice@socomm.test']->id,
             'type' => 'purchase',
             'amount' => 200,
             'xp' => 200,
@@ -306,11 +457,11 @@ class SoCommSeeder extends Seeder
             'reference' => 'SEED-OLD-1',
         ]);
 
-        // === Reversed transaction (should NOT count) ===
+        // Reversed transaction (should NOT count)
         Transaction::create([
-            'company_id' => $company->id,
-            'user_id' => $users['quinn@socomm.test']->id,
-            'referred_by_user_id' => $users['alice@socomm.test']->id,
+            'company_id' => $this->company->id,
+            'user_id' => $this->users['quinn@socomm.test']->id,
+            'referred_by_user_id' => $this->users['alice@socomm.test']->id,
             'type' => 'purchase',
             'amount' => 100,
             'xp' => 100,
@@ -321,11 +472,11 @@ class SoCommSeeder extends Seeder
             'reference' => 'SEED-REVERSED-1',
         ]);
 
-        // === Sub-threshold transaction (< 20 XP, should not make customer "active") ===
+        // Sub-threshold transaction (< 20 XP, should NOT make customer "active")
         Transaction::create([
-            'company_id' => $company->id,
-            'user_id' => $users['victor@socomm.test']->id,
-            'referred_by_user_id' => $users['eve@socomm.test']->id,
+            'company_id' => $this->company->id,
+            'user_id' => $this->users['victor@socomm.test']->id,
+            'referred_by_user_id' => $this->users['eve@socomm.test']->id,
             'type' => 'purchase',
             'amount' => 15,
             'xp' => 15,
@@ -337,14 +488,129 @@ class SoCommSeeder extends Seeder
         ]);
     }
 
-    private function createWalletAccounts(Company $company, array $users): void
+    private function createWalletAccounts(): void
     {
-        foreach ($users as $user) {
+        foreach ($this->users as $user) {
             if ($user->role === 'affiliate') {
                 WalletAccount::create([
-                    'company_id' => $company->id,
+                    'company_id' => $this->company->id,
                     'user_id' => $user->id,
                     'currency' => 'USD',
+                ]);
+            }
+        }
+    }
+
+    private function createCommissionHistory(): void
+    {
+        // Create historical commission runs and ledger entries so
+        // the dashboard has data to display
+        $affiliates = collect($this->users)->filter(fn (User $u) => $u->role === 'affiliate');
+
+        // Generate 14 days of commission history
+        for ($daysAgo = 14; $daysAgo >= 1; $daysAgo--) {
+            $runDate = Carbon::today()->subDays($daysAgo);
+
+            $run = CommissionRun::create([
+                'company_id' => $this->company->id,
+                'compensation_plan_id' => $this->plan->id,
+                'run_date' => $runDate,
+                'status' => 'completed',
+                'total_affiliate_commission' => 0,
+                'total_viral_commission' => 0,
+                'total_company_volume' => 0,
+                'viral_cap_triggered' => false,
+                'started_at' => $runDate->copy()->setTime(2, 0, 0),
+                'completed_at' => $runDate->copy()->setTime(2, 0, 5),
+            ]);
+
+            $totalAff = 0;
+            $totalViral = 0;
+
+            foreach ($affiliates as $affiliate) {
+                // Affiliate commission — varies by affiliate size
+                $baseAffCommission = match(true) {
+                    in_array($affiliate->email, ['alice@socomm.test']) => rand(800, 1500) / 100,
+                    in_array($affiliate->email, ['bob@socomm.test', 'charlie@socomm.test']) => rand(400, 900) / 100,
+                    in_array($affiliate->email, ['frank@socomm.test', 'diana@socomm.test', 'mia@socomm.test']) => rand(200, 600) / 100,
+                    default => rand(50, 300) / 100,
+                };
+
+                if ($baseAffCommission > 0.50) {
+                    CommissionLedgerEntry::create([
+                        'company_id' => $this->company->id,
+                        'commission_run_id' => $run->id,
+                        'user_id' => $affiliate->id,
+                        'type' => 'affiliate_commission',
+                        'amount' => number_format($baseAffCommission, 4, '.', ''),
+                        'tier_achieved' => rand(1, 6),
+                        'qualification_snapshot' => ['seeded' => true],
+                        'description' => 'Daily affiliate commission',
+                        'created_at' => $runDate,
+                    ]);
+                    $totalAff += $baseAffCommission;
+                }
+
+                // Viral commission — only for affiliates with larger trees
+                $viralAmount = match(true) {
+                    in_array($affiliate->email, ['alice@socomm.test']) => rand(200, 530) / 100,
+                    in_array($affiliate->email, ['bob@socomm.test', 'charlie@socomm.test']) => rand(53, 267) / 100,
+                    in_array($affiliate->email, ['frank@socomm.test']) => rand(53, 133) / 100,
+                    default => 0,
+                };
+
+                if ($viralAmount > 0) {
+                    CommissionLedgerEntry::create([
+                        'company_id' => $this->company->id,
+                        'commission_run_id' => $run->id,
+                        'user_id' => $affiliate->id,
+                        'type' => 'viral_commission',
+                        'amount' => number_format($viralAmount, 4, '.', ''),
+                        'tier_achieved' => rand(1, 5),
+                        'qualification_snapshot' => ['seeded' => true],
+                        'description' => 'Daily viral commission',
+                        'created_at' => $runDate,
+                    ]);
+                    $totalViral += $viralAmount;
+                }
+            }
+
+            $run->update([
+                'total_affiliate_commission' => round($totalAff, 2),
+                'total_viral_commission' => round($totalViral, 2),
+                'total_company_volume' => rand(1200, 2500),
+            ]);
+        }
+
+        // Create wallet movements from commission entries
+        foreach ($affiliates as $affiliate) {
+            $wallet = WalletAccount::where('user_id', $affiliate->id)
+                ->where('company_id', $this->company->id)
+                ->first();
+
+            if (! $wallet) {
+                continue;
+            }
+
+            $entries = CommissionLedgerEntry::withoutGlobalScope(CompanyScope::class)
+                ->where('user_id', $affiliate->id)
+                ->where('company_id', $this->company->id)
+                ->get();
+
+            // Older entries are "released", recent ones are "pending"
+            foreach ($entries as $entry) {
+                $isPending = $entry->created_at && $entry->created_at->gt(Carbon::today()->subDays(7));
+
+                WalletMovement::create([
+                    'company_id' => $this->company->id,
+                    'wallet_account_id' => $wallet->id,
+                    'type' => 'commission_credit',
+                    'amount' => $entry->amount,
+                    'status' => $isPending ? 'pending' : 'released',
+                    'reference_type' => 'commission_ledger_entry',
+                    'reference_id' => $entry->id,
+                    'description' => 'Commission credit from ' . $entry->type,
+                    'effective_at' => $entry->created_at ?? now(),
                 ]);
             }
         }

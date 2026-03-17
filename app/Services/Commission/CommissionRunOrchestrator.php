@@ -4,6 +4,7 @@ namespace App\Services\Commission;
 
 use App\DTOs\CommissionResult;
 use App\DTOs\PlanConfig;
+use App\Scopes\CompanyScope;
 use App\Models\CommissionLedgerEntry;
 use App\Models\CommissionRun;
 use App\Models\Company;
@@ -48,7 +49,7 @@ class CommissionRunOrchestrator
 
         try {
             // 4. Get all affiliates for this company
-            $affiliates = User::withoutGlobalScopes()
+            $affiliates = User::withoutGlobalScope(CompanyScope::class)
                 ->where('company_id', $company->id)
                 ->where('role', 'affiliate')
                 ->where('status', 'active')
@@ -67,7 +68,7 @@ class CommissionRunOrchestrator
 
             // 7. Get rolling 30-day company volume for the run record
             $windowStart = $date->copy()->subDays($config->rolling_days - 1);
-            $totalCompanyVolume = Transaction::withoutGlobalScopes()
+            $totalCompanyVolume = Transaction::withoutGlobalScope(CompanyScope::class)
                 ->where('company_id', $company->id)
                 ->where('status', 'confirmed')
                 ->where('qualifies_for_commission', true)
@@ -224,7 +225,7 @@ class CommissionRunOrchestrator
 
     private function getActivePlan(Company $company, Carbon $date): CompensationPlan
     {
-        $plan = CompensationPlan::withoutGlobalScopes()
+        $plan = CompensationPlan::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $company->id)
             ->where('is_active', true)
             ->whereDate('effective_from', '<=', $date->toDateString())
@@ -244,26 +245,26 @@ class CommissionRunOrchestrator
 
     private function deleteExistingRun(Company $company, Carbon $date): void
     {
-        $existingRun = CommissionRun::withoutGlobalScopes()
+        $existingRun = CommissionRun::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $company->id)
             ->whereDate('run_date', $date->toDateString())
             ->first();
 
         if ($existingRun) {
             // Delete wallet movements that reference this run's ledger entries
-            $ledgerEntryIds = CommissionLedgerEntry::withoutGlobalScopes()
+            $ledgerEntryIds = CommissionLedgerEntry::withoutGlobalScope(CompanyScope::class)
                 ->where('commission_run_id', $existingRun->id)
                 ->pluck('id');
 
             if ($ledgerEntryIds->isNotEmpty()) {
-                WalletMovement::withoutGlobalScopes()
+                WalletMovement::withoutGlobalScope(CompanyScope::class)
                     ->where('reference_type', 'commission_ledger_entry')
                     ->whereIn('reference_id', $ledgerEntryIds)
                     ->delete();
             }
 
             // Delete ledger entries, then the run
-            CommissionLedgerEntry::withoutGlobalScopes()
+            CommissionLedgerEntry::withoutGlobalScope(CompanyScope::class)
                 ->where('commission_run_id', $existingRun->id)
                 ->delete();
 

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Actions\RecalculateCommissionRun;
 use App\Models\CommissionRun;
+use App\Scopes\CompanyScope;
 use App\Models\Company;
 use Illuminate\Console\Command;
 
@@ -24,7 +25,7 @@ class RecalculateCommissionCommand extends Command
             return self::FAILURE;
         }
 
-        $run = CommissionRun::withoutGlobalScopes()
+        $run = CommissionRun::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $company->id)
             ->find($this->argument('run_id'));
 

@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\DTOs\SimulationConfig;
 use App\Models\CompensationPlan;
+use App\Scopes\CompanyScope;
 use App\Models\Company;
 use App\Models\SimulationRun;
 use App\Services\Simulator\SimulatorOrchestrator;
@@ -85,7 +86,7 @@ class ScenarioSimulator extends Page implements HasForms
                         if (!$this->company_id) {
                             return [];
                         }
-                        return CompensationPlan::withoutGlobalScopes()
+                        return CompensationPlan::withoutGlobalScope(CompanyScope::class)
                             ->where('company_id', $this->company_id)
                             ->where('is_active', true)
                             ->pluck('name', 'id');
@@ -157,7 +158,7 @@ class ScenarioSimulator extends Page implements HasForms
         $this->validate();
 
         $company = Company::find($this->company_id);
-        $plan = CompensationPlan::withoutGlobalScopes()->find($this->compensation_plan_id);
+        $plan = CompensationPlan::withoutGlobalScope(CompanyScope::class)->find($this->compensation_plan_id);
 
         if (!$company || !$plan) {
             Notification::make()->title('Company or plan not found.')->danger()->send();
@@ -199,7 +200,7 @@ class ScenarioSimulator extends Page implements HasForms
             $this->results = $result->toStorableArray();
 
             // Track the simulation run ID for export
-            $this->lastSimulationRunId = SimulationRun::withoutGlobalScopes()
+            $this->lastSimulationRunId = SimulationRun::withoutGlobalScope(CompanyScope::class)
                 ->where('company_id', $company->id)
                 ->where('name', $this->simulation_name)
                 ->latest()
@@ -247,7 +248,7 @@ class ScenarioSimulator extends Page implements HasForms
             return;
         }
 
-        $run = SimulationRun::withoutGlobalScopes()->find($this->compare_run_id);
+        $run = SimulationRun::withoutGlobalScope(CompanyScope::class)->find($this->compare_run_id);
         if ($run && $run->results) {
             $this->compareResults = $run->results;
             Notification::make()->title("Loaded '{$run->name}' for comparison.")->success()->send();
@@ -266,7 +267,7 @@ class ScenarioSimulator extends Page implements HasForms
             return [];
         }
 
-        return SimulationRun::withoutGlobalScopes()
+        return SimulationRun::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $this->company_id)
             ->where('status', 'completed')
             ->orderByDesc('created_at')
