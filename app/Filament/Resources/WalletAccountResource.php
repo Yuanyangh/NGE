@@ -13,9 +13,11 @@ class WalletAccountResource extends Resource
 {
     protected static ?string $model = WalletAccount::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-wallet';
+    protected static ?string $navigationIcon = 'heroicon-o-credit-card';
 
     protected static ?string $navigationGroup = 'Wallets';
+
+    protected static ?int $navigationSort = 6;
 
     public static function canCreate(): bool
     {
@@ -25,6 +27,8 @@ class WalletAccountResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->striped()
+            ->defaultPaginationPageOption(25)
             ->columns([
                 Tables\Columns\TextColumn::make('id')->sortable(),
                 Tables\Columns\TextColumn::make('company.name')->sortable(),

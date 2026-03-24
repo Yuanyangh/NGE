@@ -13,9 +13,11 @@ class CommissionLedgerEntryResource extends Resource
 {
     protected static ?string $model = CommissionLedgerEntry::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
+    protected static ?string $navigationIcon = 'heroicon-o-banknotes';
 
     protected static ?string $navigationGroup = 'Compensation';
+
+    protected static ?int $navigationSort = 5;
 
     protected static ?string $navigationLabel = 'Commission Ledger';
 
@@ -27,6 +29,11 @@ class CommissionLedgerEntryResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->striped()
+            ->defaultPaginationPageOption(25)
+            ->emptyStateHeading('No ledger entries yet')
+            ->emptyStateDescription('Commission ledger entries will appear here after a commission run is executed.')
+            ->emptyStateIcon('heroicon-o-banknotes')
             ->columns([
                 Tables\Columns\TextColumn::make('id')->sortable(),
                 Tables\Columns\TextColumn::make('company.name')->sortable(),

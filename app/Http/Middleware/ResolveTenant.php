@@ -21,7 +21,7 @@ class ResolveTenant
 
         $company = $companySlug instanceof Company
             ? $companySlug
-            : Company::where('slug', $companySlug)->where('is_active', true)->first();
+            : Company::whereRaw('LOWER(slug) = ?', [strtolower($companySlug)])->where('is_active', true)->first();
 
         if (! $company) {
             throw new NotFoundHttpException('Company not found.');

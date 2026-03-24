@@ -149,8 +149,8 @@
                             const datasets = [{
                                 label: 'Current',
                                 data: projections.map(p => parseFloat(p.payout_ratio_percent)),
-                                borderColor: '#f59e0b',
-                                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                                borderColor: '#6366f1',
+                                backgroundColor: 'rgba(99, 102, 241, 0.1)',
                                 fill: true,
                                 tension: 0.3,
                                 pointRadius: 0,

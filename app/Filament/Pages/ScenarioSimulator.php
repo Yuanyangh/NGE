@@ -22,8 +22,9 @@ class ScenarioSimulator extends Page implements HasForms
 {
     use InteractsWithForms;
 
-    protected static ?string $navigationIcon = 'heroicon-o-chart-bar-square';
+    protected static ?string $navigationIcon = 'heroicon-o-beaker';
     protected static ?string $navigationLabel = 'Scenario Simulator';
+    protected static ?string $navigationGroup = 'Tools';
     protected static ?string $title = 'Scenario Simulator';
     protected static ?int $navigationSort = 10;
     protected static string $view = 'filament.pages.scenario-simulator';

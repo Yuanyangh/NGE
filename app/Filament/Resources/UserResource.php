@@ -15,9 +15,11 @@ class UserResource extends Resource
 {
     protected static ?string $model = User::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-users';
+    protected static ?string $navigationIcon = 'heroicon-o-user-group';
 
-    protected static ?string $navigationGroup = 'Company';
+    protected static ?string $navigationGroup = 'Organization';
+
+    protected static ?int $navigationSort = 2;
 
     public static function form(Form $form): Form
     {
@@ -52,6 +54,8 @@ class UserResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->striped()
+            ->defaultPaginationPageOption(25)
             ->columns([
                 Tables\Columns\TextColumn::make('id')->sortable(),
                 Tables\Columns\TextColumn::make('company.name')->sortable(),
@@ -59,7 +63,7 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('email')->searchable(),
                 Tables\Columns\TextColumn::make('role')->badge()
                     ->color(fn (string $state): string => match ($state) {
-                        'admin' => 'danger',
+                        'admin' => 'primary',
                         'affiliate' => 'success',
                         'customer' => 'info',
                     }),

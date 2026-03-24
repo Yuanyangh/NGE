@@ -1,0 +1,48 @@
+@import 'tailwindcss';
+
+@source '../../../../vendor/filament/filament/resources/views/**/*.blade.php';
+@source '../../../../app/Filament/**/*.php';
+@source '../../../../resources/views/filament/**/*.blade.php';
+
+@theme {
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Sidebar refinement */
+.fi-sidebar {
+    border-right: 1px solid var(--color-gray-200);
+}
+.dark .fi-sidebar {
+    border-right-color: var(--color-gray-700);
+}
+
+/* Table row hover */
+.fi-ta-row:hover td {
+    background-color: var(--color-primary-50) !important;
+}
+.dark .fi-ta-row:hover td {
+    background-color: color-mix(in srgb, var(--color-primary-900) 20%, transparent) !important;
+}
+
+/* Card border-radius */
+.fi-section,
+.fi-wi-stats-overview-stat,
+.fi-card {
+    border-radius: 0.75rem;
+}
+
+/* Badge letter-spacing */
+.fi-badge {
+    letter-spacing: 0.025em;
+}
+
+/* Login page gradient background */
+.fi-simple-page {
+    background: linear-gradient(135deg, #312e81 0%, #4338ca 50%, #6366f1 100%) !important;
+    min-height: 100vh;
+}
+
+/* Dark mode overrides */
+.dark .fi-simple-page {
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #3730a3 100%) !important;
+}

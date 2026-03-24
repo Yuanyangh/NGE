@@ -19,9 +19,11 @@ class CommissionRunResource extends Resource
 {
     protected static ?string $model = CommissionRun::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-play-circle';
+    protected static ?string $navigationIcon = 'heroicon-o-bolt';
 
     protected static ?string $navigationGroup = 'Compensation';
+
+    protected static ?int $navigationSort = 4;
 
     public static function form(Form $form): Form
     {
@@ -40,6 +42,8 @@ class CommissionRunResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->striped()
+            ->defaultPaginationPageOption(25)
             ->columns([
                 Tables\Columns\TextColumn::make('id')->sortable(),
                 Tables\Columns\TextColumn::make('company.name')->sortable(),
@@ -53,11 +57,13 @@ class CommissionRunResource extends Resource
                         default => 'gray',
                     }),
                 Tables\Columns\TextColumn::make('total_affiliate_commission')
-                    ->numeric(decimalPlaces: 4)
-                    ->label('Affiliate'),
+                    ->money('USD')
+                    ->label('Affiliate')
+                    ->alignEnd(),
                 Tables\Columns\TextColumn::make('total_viral_commission')
-                    ->numeric(decimalPlaces: 4)
-                    ->label('Viral'),
+                    ->money('USD')
+                    ->label('Viral')
+                    ->alignEnd(),
                 Tables\Columns\IconColumn::make('viral_cap_triggered')->boolean(),
                 Tables\Columns\TextColumn::make('started_at')->dateTime()->sortable(),
             ])

@@ -41,13 +41,41 @@ php artisan wallet:credit socomm          # Run weekly wallet crediting
 
 ## Agent Workflow
 
-When starting a new task, identify which agent role applies (see PROJECT.md Section 9):
-- **Agent 1:** Database + Models (migrations, models, factories, seeders)
-- **Agent 2:** Calculation Engine (services, DTOs, business logic)
-- **Agent 3:** Test Suite (PHPUnit tests for all scenarios)
-- **Agent 4:** Admin Panel + API + Commands (Filament, routes, artisan)
+**Claude Code is the orchestrator. It does not build — it delegates.**
+For every task, identify the correct agent and spawn it via the Agent tool. Do not write code, create files, or run artisan commands yourself unless no agent covers the domain.
 
-Stay within your agent's scope. Do not build services when tasked with models. Do not build UI when tasked with calculations.
+### Agent Roster
+
+| Agent | Spawn when task involves |
+|---|---|
+| `db-architect` | Migrations, Eloquent models, factories, seeders, `CompanyScope`, `ResolveTenant` |
+| `calc-engine` | Commission services, DTOs, QVV algorithm, `app/Services/`, `app/Actions/`, `app/DTOs/` |
+| `test-suite` | PHPUnit tests in `tests/Feature/Commission/` or `tests/Unit/` |
+| `admin-api` | Filament resources, `routes/api.php`, artisan commands, Sanctum auth |
+| `admin-ui` | Filament theming, panel aesthetics, admin CSS, visual design of admin panel |
+| `frontend-dev` | Blade views, Livewire, Tailwind, affiliate routes, `resources/views/`, `app/Http/Controllers/Affiliate/` |
+| `devops` | Laravel Cloud, queue config, scheduled commands, CI/CD, `.env` |
+| `documentation` | `.claude/specs/` sync, PHPDoc, README |
+| `security-auditor` | Pre-ship security audit (read-only — reports findings, does not fix) |
+| `tech-lead` | Pre-QA architectural review (read-only — verdicts: APPROVED / NEEDS REVISION / BLOCKED) |
+| `qa-lead` | Final validation gate (read-only — verdicts: SIGNED OFF / BLOCKED) |
+
+### Pre-Ship Pipeline (required for every feature)
+
+1. Spawn `security-auditor` → read its report
+2. Spawn `tech-lead` (pass the security report) → wait for verdict
+3. If **NEEDS REVISION**: route fix to the named builder agent, then restart from step 1
+4. If **APPROVED**: spawn `qa-lead` → wait for verdict
+5. If `qa-lead` returns **BLOCKED**: fix the named issue, restart from step 1
+6. Only `qa-lead` **SIGNED OFF** = feature is complete
+
+## Orchestration Rules
+
+1. **You are the coordinator, not the coder.** Spawn agents. Review their output. Route follow-up work.
+2. **One agent per domain.** Do not ask `calc-engine` to touch migrations. Do not ask `db-architect` to touch services.
+3. **Respect sequencing.** `db-architect` must complete before `calc-engine` or `admin-api`. `test-suite` can run in parallel with `calc-engine`.
+4. **Always pass context to agents.** Include the feature name, relevant spec file path, and output from predecessor agents.
+5. **Gate agents are read-only.** `security-auditor`, `tech-lead`, and `qa-lead` never write code. Route all fixes to builder agents.
 
 ## Testing
 

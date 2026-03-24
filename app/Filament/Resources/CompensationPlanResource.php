@@ -15,9 +15,11 @@ class CompensationPlanResource extends Resource
 {
     protected static ?string $model = CompensationPlan::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-document-text';
+    protected static ?string $navigationIcon = 'heroicon-o-cog-8-tooth';
 
     protected static ?string $navigationGroup = 'Compensation';
+
+    protected static ?int $navigationSort = 3;
 
     public static function form(Form $form): Form
     {
@@ -49,6 +51,8 @@ class CompensationPlanResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->striped()
+            ->defaultPaginationPageOption(25)
             ->columns([
                 Tables\Columns\TextColumn::make('id')->sortable(),
                 Tables\Columns\TextColumn::make('company.name')->sortable(),
