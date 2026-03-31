@@ -29,6 +29,7 @@ class PayoutProjector
      * @param int $day Day number in projection
      * @param string $rollingViralPaid Rolling 30d viral commissions already paid
      * @param string $rollingAllPaid Rolling 30d all commissions already paid
+     * @param array|null $sponsorTree Pre-built sponsor tree (sponsor_id => [child_ids]). If null, built internally.
      * @return array{day_projection: DayProjection, affiliate_results: array, per_affiliate: array}
      */
     public function projectDay(
@@ -40,6 +41,7 @@ class PayoutProjector
         int $day,
         string $rollingViralPaid = '0',
         string $rollingAllPaid = '0',
+        ?array $sponsorTree = null,
     ): array {
         $date = Carbon::parse($dateString);
         $windowStart = $date->copy()->subDays($planConfig->rolling_days - 1);
@@ -73,7 +75,27 @@ class PayoutProjector
         $activeAffiliates = $network->where('role', 'affiliate')->where('status', 'active');
 
         // Build sponsor → subtree mapping for leg volume computation
-        $sponsorTree = $this->buildSponsorTree($network);
+        if ($sponsorTree === null) {
+            $sponsorTree = $this->buildSponsorTree($network);
+        }
+
+        // Pre-index transactions by referred_by_user_id for O(1) lookup
+        $txnByReferrer = [];
+        foreach ($windowTransactions as $txn) {
+            $txnByReferrer[$txn['referred_by_user_id']][] = $txn;
+        }
+
+        // Pre-index transactions by user_id for O(1) lookup in computeLegVolumes
+        $txnByUser = [];
+        foreach ($windowTransactions as $txn) {
+            $txnByUser[$txn['user_id']][] = $txn;
+        }
+
+        // Pre-index today's confirmed transactions by referrer
+        $todayByReferrer = [];
+        foreach ($todayConfirmed as $txn) {
+            $todayByReferrer[$txn['referred_by_user_id']][] = $txn;
+        }
 
         $rawResults = [];
         $perAffiliate = [];
@@ -81,11 +103,11 @@ class PayoutProjector
         foreach ($activeAffiliates as $affiliate) {
             $affiliateId = $affiliate['id'];
 
-            // Compute qualification from synthetic data
+            // Compute qualification from synthetic data using pre-indexed lookups
             $activeCustomerCount = $this->countActiveCustomers(
-                $affiliateId, $windowTransactions, $planConfig
+                $affiliateId, $txnByReferrer, $planConfig
             );
-            $referredVolume = $this->sumReferredVolume($affiliateId, $windowTransactions);
+            $referredVolume = $this->sumReferredVolume($affiliateId, $txnByReferrer);
 
             // Match affiliate tier (same logic as QualificationEvaluator::matchAffiliateTier)
             $affiliateTierIndex = $this->matchAffiliateTier($activeCustomerCount, $referredVolume, $planConfig);
@@ -96,15 +118,16 @@ class PayoutProjector
             // Compute affiliate (direct) commission on today's new volume
             $affiliateCommission = '0';
             if ($affiliateTierIndex !== null) {
-                $todayReferredVolume = $todayConfirmed
-                    ->where('referred_by_user_id', $affiliateId)
-                    ->reduce(fn (string $c, array $t) => bcadd($c, $t['xp'], 4), '0');
+                $todayReferredVolume = '0';
+                foreach ($todayByReferrer[$affiliateId] ?? [] as $txn) {
+                    $todayReferredVolume = bcadd($todayReferredVolume, $txn['xp'], 4);
+                }
 
                 $affiliateCommission = bcmul($todayReferredVolume, (string) $affiliateTierRate, 4);
             }
 
-            // Compute leg volumes from synthetic tree
-            $legVolumes = $this->computeLegVolumes($affiliateId, $sponsorTree, $windowTransactions);
+            // Compute leg volumes from synthetic tree using pre-indexed transactions
+            $legVolumes = $this->computeLegVolumes($affiliateId, $sponsorTree, $txnByUser);
 
             // Reuse Phase 1 QvvCalculator (pure math, no DB)
             $volumeSnapshot = $this->qvvCalculator->calculate($legVolumes, $planConfig);
@@ -180,37 +203,64 @@ class PayoutProjector
     }
 
     /**
-     * Count active customers for an affiliate from synthetic transactions.
+     * Count active customers for an affiliate from pre-indexed transactions.
      * Mirrors QualificationEvaluator::countActiveCustomers logic.
+     *
+     * @param int $affiliateId
+     * @param array<int, array[]> $txnByReferrer Transactions indexed by referred_by_user_id
+     * @param PlanConfig $config
+     * @return int
      */
-    private function countActiveCustomers(int $affiliateId, Collection $windowTransactions, PlanConfig $config): int
+    private function countActiveCustomers(int $affiliateId, array $txnByReferrer, PlanConfig $config): int
     {
-        $referred = $windowTransactions->where('referred_by_user_id', $affiliateId);
+        $referred = $txnByReferrer[$affiliateId] ?? [];
+
+        if (empty($referred)) {
+            return 0;
+        }
 
         if ($config->active_customer_threshold_type === 'per_order') {
-            return $referred
-                ->filter(fn (array $t) => (float) $t['xp'] >= $config->active_customer_min_order_xp)
-                ->pluck('user_id')
-                ->unique()
-                ->count();
+            $uniqueUsers = [];
+            foreach ($referred as $txn) {
+                if ((float) $txn['xp'] >= $config->active_customer_min_order_xp) {
+                    $uniqueUsers[$txn['user_id']] = true;
+                }
+            }
+            return count($uniqueUsers);
         }
 
         // cumulative_in_window
-        return $referred
-            ->groupBy('user_id')
-            ->filter(fn (Collection $group) => $group->sum('xp') >= $config->active_customer_min_order_xp)
-            ->count();
+        $userTotals = [];
+        foreach ($referred as $txn) {
+            $userId = $txn['user_id'];
+            $userTotals[$userId] = ($userTotals[$userId] ?? 0) + (float) $txn['xp'];
+        }
+
+        $count = 0;
+        foreach ($userTotals as $total) {
+            if ($total >= $config->active_customer_min_order_xp) {
+                $count++;
+            }
+        }
+        return $count;
     }
 
     /**
-     * Sum referred volume for an affiliate from synthetic transactions.
+     * Sum referred volume for an affiliate from pre-indexed transactions.
      * Mirrors QualificationEvaluator::sumReferredVolume logic.
+     *
+     * @param int $affiliateId
+     * @param array<int, array[]> $txnByReferrer Transactions indexed by referred_by_user_id
+     * @return string
      */
-    private function sumReferredVolume(int $affiliateId, Collection $windowTransactions): string
+    private function sumReferredVolume(int $affiliateId, array $txnByReferrer): string
     {
-        return $windowTransactions
-            ->where('referred_by_user_id', $affiliateId)
-            ->reduce(fn (string $c, array $t) => bcadd($c, $t['xp'], 4), '0');
+        $referred = $txnByReferrer[$affiliateId] ?? [];
+        $sum = '0';
+        foreach ($referred as $txn) {
+            $sum = bcadd($sum, $txn['xp'], 4);
+        }
+        return $sum;
     }
 
     /**
@@ -243,10 +293,15 @@ class PayoutProjector
     }
 
     /**
-     * Compute leg volumes from synthetic tree data.
+     * Compute leg volumes from synthetic tree data using pre-indexed transactions.
      * Mirrors LegAggregator::getLegVolumes logic but on in-memory data.
+     *
+     * @param int $affiliateId
+     * @param array $sponsorTree
+     * @param array<int, array[]> $txnByUser Transactions indexed by user_id
+     * @return array
      */
-    private function computeLegVolumes(int $affiliateId, array $sponsorTree, Collection $windowTransactions): array
+    private function computeLegVolumes(int $affiliateId, array $sponsorTree, array $txnByUser): array
     {
         $directChildren = $sponsorTree[$affiliateId] ?? [];
         if (empty($directChildren)) {
@@ -256,9 +311,12 @@ class PayoutProjector
         $legs = [];
         foreach ($directChildren as $childId) {
             $subtreeIds = $this->getSubtreeIds($childId, $sponsorTree);
-            $volume = $windowTransactions
-                ->whereIn('user_id', $subtreeIds)
-                ->reduce(fn (string $c, array $t) => bcadd($c, $t['xp'], 4), '0');
+            $volume = '0';
+            foreach ($subtreeIds as $id) {
+                foreach ($txnByUser[$id] ?? [] as $txn) {
+                    $volume = bcadd($volume, $txn['xp'], 4);
+                }
+            }
 
             $legs[] = [
                 'leg_root_user_id' => $childId,

@@ -10,6 +10,12 @@ class NetworkGrowthProjector
     private int $nextUserId = 1;
 
     /**
+     * Index mapping user_id => collection index for O(1) lookups.
+     * @var array<int, int>
+     */
+    private array $networkIndex = [];
+
+    /**
      * Initialize the synthetic network from starting parameters.
      *
      * Returns a Collection of synthetic user arrays:
@@ -26,6 +32,7 @@ class NetworkGrowthProjector
     public function initializeNetwork(SimulationConfig $config): Collection
     {
         $this->nextUserId = 1;
+        $this->networkIndex = [];
         $network = collect();
 
         // Create starting affiliates (form a chain for tree structure)
@@ -39,6 +46,7 @@ class NetworkGrowthProjector
 
             $user = $this->createSyntheticUser('affiliate', $sponsorId, 0);
             $network->push($user);
+            $this->networkIndex[$user['id']] = $network->count() - 1;
             $affiliateIds[] = $user['id'];
 
             if ($sponsorId !== null) {
@@ -52,6 +60,7 @@ class NetworkGrowthProjector
             $user = $this->createSyntheticUser('customer', $sponsorId, 0);
             $user['is_smartship'] = (mt_rand(1, 100) / 100.0) <= $config->smartship_adoption_rate;
             $network->push($user);
+            $this->networkIndex[$user['id']] = $network->count() - 1;
 
             $this->addToSponsorLegs($network, $sponsorId, $user['id']);
         }
@@ -94,6 +103,7 @@ class NetworkGrowthProjector
             $sponsorId = $this->pickSponsor($activeAffiliateIds, $network, $config);
             $user = $this->createSyntheticUser('affiliate', $sponsorId, $day);
             $network->push($user);
+            $this->networkIndex[$user['id']] = $network->count() - 1;
             $activeAffiliateIds[] = $user['id'];
             $this->addToSponsorLegs($network, $sponsorId, $user['id']);
         }
@@ -115,6 +125,7 @@ class NetworkGrowthProjector
                 $user['is_smartship'] = (mt_rand(1, 100) / 100.0) <= $config->smartship_adoption_rate;
             }
             $network->push($user);
+            $this->networkIndex[$user['id']] = $network->count() - 1;
 
             if ($role === 'affiliate') {
                 $activeAffiliateIds[] = $user['id'];
@@ -149,7 +160,7 @@ class NetworkGrowthProjector
         // Unless leg_balance_ratio is low (concentrate on fewer sponsors)
         $weights = [];
         foreach ($affiliateIds as $id) {
-            $user = $network->firstWhere('id', $id);
+            $user = isset($this->networkIndex[$id]) ? $network[$this->networkIndex[$id]] : null;
             if ($user === null || $user['status'] !== 'active') {
                 continue;
             }
@@ -204,12 +215,12 @@ class NetworkGrowthProjector
 
     private function addToSponsorLegs(Collection $network, int $sponsorId, int $childId): void
     {
-        $network->transform(function (array $user) use ($sponsorId, $childId) {
-            if ($user['id'] === $sponsorId) {
-                $user['legs'][] = $childId;
-            }
-            return $user;
-        });
+        $idx = $this->networkIndex[$sponsorId] ?? null;
+        if ($idx !== null) {
+            $user = $network[$idx];
+            $user['legs'][] = $childId;
+            $network[$idx] = $user;
+        }
     }
 
     private function getGrowthCount(float $baseRate, string $curve, int $day): int

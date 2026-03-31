@@ -8,7 +8,9 @@ class TierProgressData extends Data
 {
     public function __construct(
         // Affiliate commission progress
+        public readonly ?int $current_affiliate_tier,
         public readonly ?float $current_affiliate_rate,
+        public readonly ?int $next_affiliate_tier,
         public readonly ?float $next_affiliate_rate,
         public readonly int $current_customers,
         public readonly string $current_volume,

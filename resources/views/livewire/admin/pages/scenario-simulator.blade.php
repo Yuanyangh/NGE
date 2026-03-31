@@ -1,4 +1,4 @@
-<div>
+<div @if($isRunning) wire:poll.2s="pollProgress" @endif>
     <x-admin.page-header
         title="Scenario Simulator"
         description="Project network growth, commissions, and sustainability over time."
@@ -156,20 +156,33 @@
 
         {{-- Submit --}}
         <div class="flex items-center gap-4">
-            <button
-                type="submit"
-                class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-offset-slate-900"
-                wire:loading.attr="disabled"
-            >
-                <span wire:loading.remove wire:target="runSimulation">
-                    <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z"/></svg>
-                </span>
-                <span wire:loading wire:target="runSimulation">
-                    <svg class="size-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
-                </span>
-                <span wire:loading.remove wire:target="runSimulation">Run Simulation</span>
-                <span wire:loading wire:target="runSimulation">Running...</span>
-            </button>
+            @if ($isRunning)
+                <div class="flex-1">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Running simulation...</span>
+                        <span class="text-sm text-slate-500 dark:text-slate-400">{{ $progress }}%</span>
+                    </div>
+                    <div class="h-2 w-full rounded-full bg-slate-200 dark:bg-slate-700">
+                        <div class="h-2 rounded-full bg-indigo-600 transition-all duration-500" style="width: {{ $progress }}%"></div>
+                    </div>
+                </div>
+            @else
+                <button
+                    type="submit"
+                    class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-offset-slate-900"
+                    wire:loading.attr="disabled"
+                    wire:target="runSimulation"
+                >
+                    <span wire:loading.remove wire:target="runSimulation">
+                        <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z"/></svg>
+                    </span>
+                    <span wire:loading wire:target="runSimulation">
+                        <svg class="size-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+                    </span>
+                    <span wire:loading.remove wire:target="runSimulation">Run Simulation</span>
+                    <span wire:loading wire:target="runSimulation">Queuing...</span>
+                </button>
+            @endif
         </div>
     </form>
 

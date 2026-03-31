@@ -8,13 +8,17 @@ use App\Models\CommissionLedgerEntry;
 use App\Models\User;
 use App\Scopes\CompanyScope;
 use App\Models\WalletMovement;
+use App\Services\Commission\LegAggregator;
 use App\Services\Commission\QualificationEvaluator;
+use App\Services\Commission\QvvCalculator;
 use Carbon\Carbon;
 
 class AffiliateDashboardService
 {
     public function __construct(
         private QualificationEvaluator $qualificationEvaluator,
+        private LegAggregator $legAggregator,
+        private QvvCalculator $qvvCalculator,
     ) {}
 
     public function getDashboardData(User $affiliate, Carbon $date, PlanConfig $config): AffiliateDashboardData
@@ -69,13 +73,37 @@ class AffiliateDashboardService
             ])
             ->toArray();
 
+        // Compute effective viral tier using actual QVV
+        $legVolumes = $this->legAggregator->getLegVolumes($affiliate, $date, $config);
+        $volumeSnapshot = $this->qvvCalculator->calculate($legVolumes, $config);
+        $currentQvv = $volumeSnapshot->qualifying_viral_volume;
+
+        $effectiveViralTier = $qualification->viral_tier;
+        $effectiveViralDailyReward = $qualification->viral_daily_reward;
+
+        $viralTierIndex = $this->qualificationEvaluator->matchViralTierWithQvv(
+            $qualification->active_customer_count,
+            $qualification->referred_volume_30d,
+            $currentQvv,
+            $config
+        );
+
+        if ($viralTierIndex !== null) {
+            $effectiveViralTier = $config->viral_tiers[$viralTierIndex]->tier;
+            $effectiveViralDailyReward = $config->viral_tiers[$viralTierIndex]->daily_reward;
+        } else {
+            $effectiveViralTier = null;
+            $effectiveViralDailyReward = null;
+        }
+
         return new AffiliateDashboardData(
             total_earned_30d: $totalEarned30d,
             pending_amount: $pendingAmount,
             wallet_balance: $walletBalance,
+            current_affiliate_tier: $qualification->affiliate_tier_index !== null ? $qualification->affiliate_tier_index + 1 : null,
             current_affiliate_rate: $qualification->affiliate_tier_rate,
-            current_viral_tier: $qualification->viral_tier,
-            current_viral_daily_reward: $qualification->viral_daily_reward,
+            current_viral_tier: $effectiveViralTier,
+            current_viral_daily_reward: $effectiveViralDailyReward,
             recent_activity: $recentEntries,
         );
     }

@@ -68,12 +68,13 @@ class SimulatorOrchestrator
     }
 
     /**
-     * Execute simulation without persisting (for testing).
+     * Execute simulation without persisting (for testing or async job use).
+     * The optional $onProgress callback receives ($day, $totalDays) after each day is processed.
      */
-    public function execute(SimulationConfig $config, PlanConfig $planConfig): SimulationResult
+    public function execute(SimulationConfig $config, PlanConfig $planConfig, ?callable $onProgress = null): SimulationResult
     {
         $network = $this->networkProjector->initializeNetwork($config);
-        $allTransactions = collect();
+        $allTransactions = []; // plain array for efficient append + prune
         $dailyProjections = [];
         $startDate = Carbon::today()->addDay();
 
@@ -90,6 +91,16 @@ class SimulatorOrchestrator
             'viral_tiers' => [],
         ];
 
+        // Build sponsor tree once from initial network, then update incrementally
+        $sponsorTree = [];
+        foreach ($network as $user) {
+            if ($user['sponsor_id'] !== null) {
+                $sponsorTree[$user['sponsor_id']][] = $user['id'];
+            }
+        }
+
+        $previousNetworkSize = $network->count();
+
         for ($day = 1; $day <= $config->projection_days; $day++) {
             $currentDate = $startDate->copy()->addDays($day - 1);
             $dateString = $currentDate->toDateString();
@@ -97,32 +108,48 @@ class SimulatorOrchestrator
             // 1. Grow the network
             $network = $this->networkProjector->projectDay($network, $config, $day);
 
+            // Incrementally update sponsor tree with new users
+            $currentNetworkSize = $network->count();
+            for ($i = $previousNetworkSize; $i < $currentNetworkSize; $i++) {
+                $user = $network[$i];
+                if ($user['sponsor_id'] !== null) {
+                    $sponsorTree[$user['sponsor_id']][] = $user['id'];
+                }
+            }
+            $previousNetworkSize = $currentNetworkSize;
+
             // 2. Generate synthetic transactions
             $todayTransactions = $this->transactionProjector->projectDay(
                 $network, $config, $day, $dateString
             );
-            $allTransactions = $allTransactions->merge($todayTransactions);
+
+            // Append today's transactions to the running array
+            foreach ($todayTransactions as $txn) {
+                $allTransactions[] = $txn;
+            }
 
             // Prune transactions older than rolling window to save memory
-            $windowCutoff = $currentDate->copy()->subDays($planConfig->rolling_days);
-            $allTransactions = $allTransactions->filter(
-                fn (array $t) => $t['transaction_date'] >= $windowCutoff->toDateString()
-            )->values();
+            $windowCutoffStr = $currentDate->copy()->subDays($planConfig->rolling_days)->toDateString();
+            $allTransactions = array_values(array_filter(
+                $allTransactions,
+                fn (array $t) => $t['transaction_date'] >= $windowCutoffStr
+            ));
 
             // Calculate rolling 30d paid commissions
             $rollingViralPaid = $this->sumRollingTotals($dailyViralTotals, $currentDate, $planConfig->rolling_days);
             $rollingAllPaid = $this->sumRollingTotals($dailyAllTotals, $currentDate, $planConfig->rolling_days);
 
-            // 3. Run commission calculations
+            // 3. Run commission calculations — pass pre-built sponsorTree
             $payoutResult = $this->payoutProjector->projectDay(
                 network: $network,
                 todayTransactions: $todayTransactions,
-                allTransactions: $allTransactions,
+                allTransactions: collect($allTransactions),
                 planConfig: $planConfig,
                 dateString: $dateString,
                 day: $day,
                 rollingViralPaid: $rollingViralPaid,
                 rollingAllPaid: $rollingAllPaid,
+                sponsorTree: $sponsorTree,
             );
 
             // 4. Record day projection
@@ -198,6 +225,11 @@ class SimulatorOrchestrator
                         );
                     }
                 }
+            }
+
+            // Invoke progress callback after all processing for this day
+            if ($onProgress !== null) {
+                $onProgress($day, $config->projection_days);
             }
         }
 

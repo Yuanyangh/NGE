@@ -44,6 +44,10 @@ php artisan wallet:credit socomm          # Run weekly wallet crediting
 **Claude Code is the orchestrator. It does not build — it delegates.**
 For every task, identify the correct agent and spawn it via the Agent tool. Do not write code, create files, or run artisan commands yourself unless no agent covers the domain.
 
+## Agent Delegation (MANDATORY)
+
+**CRITICAL RULE: The main conversation MUST NOT do implementation work directly. ALL implementation MUST be delegated to the specialized agents in `.claude/agents/`.**
+
 ### Agent Roster
 
 | Agent | Spawn when task involves |

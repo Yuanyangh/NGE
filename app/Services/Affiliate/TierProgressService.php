@@ -105,7 +105,9 @@ class TierProgressService
         $qvvProgressPct = $this->progressPercentBc($currentQvv, $nextViralMinQvv !== null ? (string) $nextViralMinQvv : null);
 
         return new TierProgressData(
+            current_affiliate_tier: $currentAffiliateTierIndex !== null ? $currentAffiliateTierIndex + 1 : null,
             current_affiliate_rate: $currentAffiliateRate,
+            next_affiliate_tier: $currentAffiliateTierIndex !== null && isset($config->affiliate_tiers[$currentAffiliateTierIndex + 1]) ? $currentAffiliateTierIndex + 2 : ($currentAffiliateTierIndex === null && !empty($config->affiliate_tiers) ? 1 : null),
             next_affiliate_rate: $nextAffiliateRate,
             current_customers: $customerCount,
             current_volume: $referredVolume,

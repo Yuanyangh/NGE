@@ -38,13 +38,13 @@ class SimulationConfig extends Data
     public static function fromArray(array $data): static
     {
         return new static(
-            projection_days: $data['projection_days'] ?? 90,
-            starting_affiliates: $data['starting_affiliates'] ?? 50,
-            starting_customers: $data['starting_customers'] ?? 200,
+            projection_days: $data['projection_days'] ?? 30,
+            starting_affiliates: $data['starting_affiliates'] ?? 10,
+            starting_customers: $data['starting_customers'] ?? 40,
             seed: $data['seed'] ?? 42,
 
-            new_affiliates_per_day: $data['growth']['new_affiliates_per_day'] ?? 2,
-            new_customers_per_affiliate_per_month: $data['growth']['new_customers_per_affiliate_per_month'] ?? 3,
+            new_affiliates_per_day: $data['growth']['new_affiliates_per_day'] ?? 1,
+            new_customers_per_affiliate_per_month: $data['growth']['new_customers_per_affiliate_per_month'] ?? 2,
             affiliate_to_customer_ratio: $data['growth']['affiliate_to_customer_ratio'] ?? 0.15,
             growth_curve: $data['growth']['growth_curve'] ?? 'linear',
 

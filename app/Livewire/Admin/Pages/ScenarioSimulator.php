@@ -3,11 +3,11 @@
 namespace App\Livewire\Admin\Pages;
 
 use App\DTOs\SimulationConfig;
+use App\Jobs\RunSimulationJob;
 use App\Models\Company;
 use App\Models\CompensationPlan;
 use App\Models\SimulationRun;
 use App\Scopes\CompanyScope;
-use App\Services\Simulator\SimulatorOrchestrator;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -20,16 +20,16 @@ class ScenarioSimulator extends Component
     public ?int $company_id = null;
     public ?int $compensation_plan_id = null;
     public string $simulation_name = 'Simulation';
-    public int $projection_days = 90;
+    public int $projection_days = 30;
     public int $seed = 42;
 
     // Starting Network
-    public int $starting_affiliates = 50;
-    public int $starting_customers = 200;
+    public int $starting_affiliates = 10;
+    public int $starting_customers = 40;
 
     // Growth
-    public float $new_affiliates_per_day = 2;
-    public float $new_customers_per_affiliate_per_month = 3;
+    public float $new_affiliates_per_day = 1;
+    public float $new_customers_per_affiliate_per_month = 2;
     public float $affiliate_to_customer_ratio = 0.15;
     public string $growth_curve = 'linear';
 
@@ -54,6 +54,11 @@ class ScenarioSimulator extends Component
     public ?int $lastSimulationRunId = null;
     public ?int $compare_run_id = null;
     public ?array $compareResults = null;
+
+    // Async job tracking
+    public bool $isRunning = false;
+    public int $progress = 0;
+    public ?int $runningSimulationId = null;
 
     #[Computed]
     public function companies(): array
@@ -162,22 +167,53 @@ class ScenarioSimulator extends Component
             ],
         ]);
 
-        try {
-            $orchestrator = app(SimulatorOrchestrator::class);
-            $result = $orchestrator->run($company, $plan, $config, $this->simulation_name);
-            $this->results = $result->toStorableArray();
+        // Create the run record as pending, then dispatch the job
+        $run = SimulationRun::create([
+            'company_id' => $company->id,
+            'compensation_plan_id' => $plan->id,
+            'name' => $this->simulation_name,
+            'config' => $config->toNestedArray(),
+            'projection_days' => $config->projection_days,
+            'status' => 'pending',
+            'progress' => 0,
+        ]);
 
-            $this->lastSimulationRunId = SimulationRun::withoutGlobalScope(CompanyScope::class)
-                ->where('company_id', $company->id)
-                ->where('name', $this->simulation_name)
-                ->latest()
-                ->value('id');
+        RunSimulationJob::dispatch($run->id);
 
+        $this->isRunning = true;
+        $this->progress = 0;
+        $this->runningSimulationId = $run->id;
+    }
+
+    public function pollProgress(): void
+    {
+        if (! $this->runningSimulationId) {
+            return;
+        }
+
+        $run = SimulationRun::withoutGlobalScope(CompanyScope::class)
+            ->find($this->runningSimulationId);
+
+        if (! $run) {
+            $this->isRunning = false;
+            return;
+        }
+
+        $this->progress = $run->progress;
+
+        if ($run->status === 'completed') {
+            $this->isRunning = false;
+            $this->results = $run->results;
+            $this->lastSimulationRunId = $run->id;
+            $this->progress = 100;
+            $this->runningSimulationId = null;
             $this->dispatch('simulation-complete');
-
             session()->flash('success', 'Simulation completed successfully.');
-        } catch (\Throwable $e) {
-            session()->flash('error', 'Simulation failed: ' . $e->getMessage());
+        } elseif ($run->status === 'failed') {
+            $this->isRunning = false;
+            $this->progress = 0;
+            $this->runningSimulationId = null;
+            session()->flash('error', 'Simulation failed. Please try again.');
         }
     }
 

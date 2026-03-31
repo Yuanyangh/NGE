@@ -21,6 +21,7 @@ class SimulationRun extends Model
         'results',
         'projection_days',
         'status',
+        'progress',
         'started_at',
         'completed_at',
     ];
@@ -31,6 +32,7 @@ class SimulationRun extends Model
             'config' => 'array',
             'results' => 'array',
             'projection_days' => 'integer',
+            'progress' => 'integer',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
         ];

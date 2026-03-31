@@ -14,6 +14,7 @@ class EarningsSummary extends Component
     public string $totalEarned30d = '0';
     public string $pendingAmount = '0';
     public string $walletBalance = '0';
+    public ?int $currentAffiliateTier = null;
     public ?float $currentAffiliateRate = null;
     public ?int $currentViralTier = null;
     public ?float $currentViralDailyReward = null;
@@ -36,6 +37,7 @@ class EarningsSummary extends Component
         $this->totalEarned30d = $data->total_earned_30d;
         $this->pendingAmount = $data->pending_amount;
         $this->walletBalance = $data->wallet_balance;
+        $this->currentAffiliateTier = $data->current_affiliate_tier;
         $this->currentAffiliateRate = $data->current_affiliate_rate;
         $this->currentViralTier = $data->current_viral_tier;
         $this->currentViralDailyReward = $data->current_viral_daily_reward;
