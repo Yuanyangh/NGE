@@ -71,6 +71,11 @@ class User extends Authenticatable
         return $this->hasMany(CommissionLedgerEntry::class);
     }
 
+    public function bonusLedgerEntries(): HasMany
+    {
+        return $this->hasMany(BonusLedgerEntry::class);
+    }
+
     public function walletAccount(): HasOne
     {
         return $this->hasOne(WalletAccount::class);

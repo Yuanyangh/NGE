@@ -2,6 +2,11 @@
 
 namespace Database\Seeders;
 
+use App\Enums\BonusTypeEnum;
+use App\Models\BonusLedgerEntry;
+use App\Models\BonusTier;
+use App\Models\BonusType;
+use App\Models\BonusTypeConfig;
 use App\Models\CommissionLedgerEntry;
 use App\Models\CommissionRun;
 use App\Scopes\CompanyScope;
@@ -47,6 +52,7 @@ class SoCommSeeder extends Seeder
         $this->createTransactions();
         $this->createWalletAccounts();
         $this->createCommissionHistory();
+        $this->seedBonusTypes();
     }
 
     private function createUsers(): void
@@ -773,5 +779,100 @@ class SoCommSeeder extends Seeder
                 'clawback_window_days' => 30,
             ],
         ];
+    }
+
+    private function seedBonusTypes(): void
+    {
+        // 1. Matching Bonus
+        $matching = BonusType::create([
+            'company_id' => $this->company->id,
+            'compensation_plan_id' => $this->plan->id,
+            'type' => BonusTypeEnum::Matching,
+            'name' => 'Matching Bonus',
+            'description' => 'Earn a percentage of your personally enrolled affiliates\' commissions.',
+            'is_active' => true,
+            'priority' => 10,
+        ]);
+
+        // Matching tiers: gen 1 = 15%, gen 2 = 10%
+        BonusTier::create([
+            'bonus_type_id' => $matching->id,
+            'level' => 1,
+            'label' => 'Generation 1',
+            'qualifier_value' => null,
+            'qualifier_type' => 'generation',
+            'rate' => 0.1500,
+            'amount' => null,
+        ]);
+
+        BonusTier::create([
+            'bonus_type_id' => $matching->id,
+            'level' => 2,
+            'label' => 'Generation 2',
+            'qualifier_value' => null,
+            'qualifier_type' => 'generation',
+            'rate' => 0.1000,
+            'amount' => null,
+        ]);
+
+        // 2. Fast Start Bonus
+        $fastStart = BonusType::create([
+            'company_id' => $this->company->id,
+            'compensation_plan_id' => $this->plan->id,
+            'type' => BonusTypeEnum::FastStart,
+            'name' => 'Fast Start Bonus',
+            'description' => 'Enhanced commission rate for new affiliates during their first 30 days.',
+            'is_active' => true,
+            'priority' => 20,
+        ]);
+
+        BonusTypeConfig::create([
+            'bonus_type_id' => $fastStart->id,
+            'key' => 'duration_days',
+            'value' => '30',
+        ]);
+
+        BonusTypeConfig::create([
+            'bonus_type_id' => $fastStart->id,
+            'key' => 'enhanced_rate',
+            'value' => '2.00',
+        ]);
+
+        BonusTypeConfig::create([
+            'bonus_type_id' => $fastStart->id,
+            'key' => 'applies_to',
+            'value' => 'both',
+        ]);
+
+        // 3. Rank Advancement Bonus
+        $rankAdvancement = BonusType::create([
+            'company_id' => $this->company->id,
+            'compensation_plan_id' => $this->plan->id,
+            'type' => BonusTypeEnum::RankAdvancement,
+            'name' => 'Rank Advancement Bonus',
+            'description' => 'One-time cash bonus awarded when an affiliate first achieves a new rank.',
+            'is_active' => true,
+            'priority' => 30,
+        ]);
+
+        $rankTiers = [
+            ['level' => 1, 'label' => 'Bronze',   'qualifier_type' => 'rank', 'qualifier_value' => 1,    'amount' => 100.0000],
+            ['level' => 2, 'label' => 'Silver',   'qualifier_type' => 'rank', 'qualifier_value' => 2,    'amount' => 250.0000],
+            ['level' => 3, 'label' => 'Gold',     'qualifier_type' => 'rank', 'qualifier_value' => 3,    'amount' => 500.0000],
+            ['level' => 4, 'label' => 'Platinum', 'qualifier_type' => 'rank', 'qualifier_value' => 4,    'amount' => 1000.0000],
+            ['level' => 5, 'label' => 'Diamond',  'qualifier_type' => 'rank', 'qualifier_value' => 5,    'amount' => 2500.0000],
+        ];
+
+        foreach ($rankTiers as $tier) {
+            BonusTier::create([
+                'bonus_type_id' => $rankAdvancement->id,
+                'level' => $tier['level'],
+                'label' => $tier['label'],
+                'qualifier_value' => $tier['qualifier_value'],
+                'qualifier_type' => $tier['qualifier_type'],
+                'rate' => null,
+                'amount' => $tier['amount'],
+            ]);
+        }
     }
 }

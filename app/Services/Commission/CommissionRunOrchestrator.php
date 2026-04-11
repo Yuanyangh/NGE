@@ -4,6 +4,7 @@ namespace App\Services\Commission;
 
 use App\DTOs\CommissionResult;
 use App\DTOs\PlanConfig;
+use App\Models\BonusLedgerEntry;
 use App\Scopes\CompanyScope;
 use App\Models\CommissionLedgerEntry;
 use App\Models\CommissionRun;
@@ -12,6 +13,7 @@ use App\Models\CompensationPlan;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\WalletMovement;
+use App\Services\Commission\Bonus\BonusOrchestrator;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -25,6 +27,7 @@ class CommissionRunOrchestrator
         private readonly QvvCalculator $qvvCalculator,
         private readonly ViralCommissionCalculator $viralCalculator,
         private readonly CapEnforcer $capEnforcer,
+        private readonly BonusOrchestrator $bonusOrchestrator,
     ) {}
 
     public function run(Company $company, Carbon $date): CommissionRun
@@ -66,7 +69,15 @@ class CommissionRunOrchestrator
             // 6. Apply caps
             $capResult = $this->capEnforcer->enforce($rawResults, $company->id, $date, $config);
 
-            // 7. Get rolling 30-day company volume for the run record
+            // 7. Process bonuses via BonusOrchestrator (handles its own DB writes)
+            $bonusOrchestratorResult = $this->bonusOrchestrator->run(
+                $run,
+                $affiliates,
+                collect($capResult['adjusted_results']),
+                $date,
+            );
+
+            // 8. Get rolling 30-day company volume for the run record
             $windowStart = $date->copy()->subDays($config->rolling_days - 1);
             $totalCompanyVolume = Transaction::withoutGlobalScope(CompanyScope::class)
                 ->where('company_id', $company->id)
@@ -76,7 +87,7 @@ class CommissionRunOrchestrator
                 ->whereDate('transaction_date', '<=', $date->toDateString())
                 ->sum('xp');
 
-            // 8. Write ledger entries
+            // 9. Write commission ledger entries
             $totalAffiliate = '0';
             $totalViral = '0';
 
@@ -132,7 +143,7 @@ class CommissionRunOrchestrator
                 }
             });
 
-            // 9. Mark run as completed
+            // 10. Mark run as completed
             $run->update([
                 'status' => 'completed',
                 'total_affiliate_commission' => $totalAffiliate,
@@ -145,7 +156,9 @@ class CommissionRunOrchestrator
                 'completed_at' => now(),
             ]);
 
-            Log::info("Commission run completed for {$company->slug}: affiliate={$totalAffiliate}, viral={$totalViral}");
+            $totalBonus = $bonusOrchestratorResult->total_bonus_amount;
+
+            Log::info("Commission run completed for {$company->slug}: affiliate={$totalAffiliate}, viral={$totalViral}, bonus={$totalBonus}");
 
             return $run->fresh();
         } catch (\Throwable $e) {
@@ -263,7 +276,16 @@ class CommissionRunOrchestrator
                     ->delete();
             }
 
-            // Delete ledger entries, then the run
+            // Delete bonus ledger entries, commission ledger entries, then the run
+            try {
+                BonusLedgerEntry::$allowDeletion = true;
+                BonusLedgerEntry::withoutGlobalScope(CompanyScope::class)
+                    ->where('commission_run_id', $existingRun->id)
+                    ->delete();
+            } finally {
+                BonusLedgerEntry::$allowDeletion = false;
+            }
+
             CommissionLedgerEntry::withoutGlobalScope(CompanyScope::class)
                 ->where('commission_run_id', $existingRun->id)
                 ->delete();
@@ -274,16 +296,35 @@ class CommissionRunOrchestrator
 
     private function writeCapAdjustmentEntries(array $capResult, CommissionRun $run, Company $company): void
     {
+        // Cap adjustments are system-level entries. Use the first admin user for this company
+        // as the user_id (required FK). This is a system record, not an individual payout.
+        $systemUserId = User::withoutGlobalScope(CompanyScope::class)
+            ->where('company_id', $company->id)
+            ->where('role', 'admin')
+            ->value('id');
+
+        if ($systemUserId === null) {
+            // Fallback: use the first user of the company if no admin exists
+            $systemUserId = User::withoutGlobalScope(CompanyScope::class)
+                ->where('company_id', $company->id)
+                ->value('id');
+        }
+
+        if ($systemUserId === null) {
+            Log::warning("No users found for company {$company->id} — skipping cap adjustment entries");
+            return;
+        }
+
         if ($capResult['viral_cap_triggered']) {
             CommissionLedgerEntry::create([
                 'company_id' => $company->id,
                 'commission_run_id' => $run->id,
-                'user_id' => $run->id, // System-level entry; we'll use 0 or first affiliate
+                'user_id' => $systemUserId,
                 'type' => 'cap_adjustment',
                 'amount' => 0,
                 'description' => sprintf(
-                    'Viral cap triggered: %.4f%% reduction applied',
-                    (float) $capResult['viral_reduction_pct'] * 100
+                    'Viral cap triggered: %s%% reduction applied',
+                    bcmul($capResult['viral_reduction_pct'], '100', 4)
                 ),
                 'qualification_snapshot' => [
                     'cap_type' => 'viral',
@@ -298,12 +339,12 @@ class CommissionRunOrchestrator
             CommissionLedgerEntry::create([
                 'company_id' => $company->id,
                 'commission_run_id' => $run->id,
-                'user_id' => $run->id,
+                'user_id' => $systemUserId,
                 'type' => 'cap_adjustment',
                 'amount' => 0,
                 'description' => sprintf(
-                    'Global cap triggered: %.4f%% reduction applied',
-                    (float) $capResult['global_reduction_pct'] * 100
+                    'Global cap triggered: %s%% reduction applied',
+                    bcmul($capResult['global_reduction_pct'], '100', 4)
                 ),
                 'qualification_snapshot' => [
                     'cap_type' => 'global',

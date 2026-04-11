@@ -27,6 +27,7 @@ class CommissionRun extends Model
         'started_at',
         'completed_at',
         'error_message',
+        'total_bonus_amount',
     ];
 
     protected function casts(): array
@@ -35,6 +36,7 @@ class CommissionRun extends Model
             'run_date' => 'date',
             'total_affiliate_commission' => 'decimal:2',
             'total_viral_commission' => 'decimal:2',
+            'total_bonus_amount' => 'decimal:2',
             'total_company_volume' => 'decimal:2',
             'viral_cap_triggered' => 'boolean',
             'viral_cap_reduction_pct' => 'decimal:4',
@@ -56,5 +58,10 @@ class CommissionRun extends Model
     public function ledgerEntries(): HasMany
     {
         return $this->hasMany(CommissionLedgerEntry::class);
+    }
+
+    public function bonusLedgerEntries(): HasMany
+    {
+        return $this->hasMany(BonusLedgerEntry::class);
     }
 }

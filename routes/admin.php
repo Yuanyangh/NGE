@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AuthController;
+use App\Http\Controllers\Admin\BonusTypeController;
 use App\Http\Controllers\Admin\CommissionLedgerController;
 use App\Http\Controllers\Admin\CommissionRunController;
 use App\Http\Controllers\Admin\CompanyController;
@@ -63,5 +64,14 @@ Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
 
         // Simulator
         Route::get('simulator', \App\Livewire\Admin\Pages\ScenarioSimulator::class)->name('simulator');
+
+        // Bonus Types (nested under company + plan)
+        Route::get('companies/{company}/plans/{compensationPlan}/bonus-types', [BonusTypeController::class, 'index'])->name('companies.plans.bonus-types.index');
+        Route::get('companies/{company}/plans/{compensationPlan}/bonus-types/create', [BonusTypeController::class, 'create'])->name('companies.plans.bonus-types.create');
+        Route::post('companies/{company}/plans/{compensationPlan}/bonus-types', [BonusTypeController::class, 'store'])->name('companies.plans.bonus-types.store');
+        Route::get('companies/{company}/plans/{compensationPlan}/bonus-types/{bonusType}/edit', [BonusTypeController::class, 'edit'])->name('companies.plans.bonus-types.edit');
+        Route::put('companies/{company}/plans/{compensationPlan}/bonus-types/{bonusType}', [BonusTypeController::class, 'update'])->name('companies.plans.bonus-types.update');
+        Route::delete('companies/{company}/plans/{compensationPlan}/bonus-types/{bonusType}', [BonusTypeController::class, 'destroy'])->name('companies.plans.bonus-types.destroy');
+        Route::post('companies/{company}/plans/{compensationPlan}/bonus-types/{bonusType}/toggle', [BonusTypeController::class, 'toggleActive'])->name('bonus-types.toggle');
     });
 });

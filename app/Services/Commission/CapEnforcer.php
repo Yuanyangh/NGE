@@ -112,6 +112,106 @@ class CapEnforcer
         ];
     }
 
+    /**
+     * Re-check global cap including bonus amounts.
+     *
+     * After bonuses are calculated, the total payout may exceed the global cap.
+     * This method checks rolling commissions (already paid, including today's run
+     * if already written) plus today's proposed bonuses against the cap.
+     * Only bonus amounts are reduced if the cap is exceeded -- commissions have
+     * already been capped by the main enforce() method.
+     *
+     * @param  array  $adjustedResults  Commission results (already cap-adjusted, for reference)
+     * @param  Collection  $bonusResults  Collection of BonusResult objects
+     * @param  int  $companyId
+     * @param  Carbon  $date
+     * @param  PlanConfig  $config
+     * @return array{adjusted_results: array, adjusted_bonuses: Collection, global_cap_with_bonus_triggered: bool, global_bonus_reduction_pct: string}
+     */
+    public function enforceGlobalCapWithBonuses(
+        array $adjustedResults,
+        \Illuminate\Support\Collection $bonusResults,
+        int $companyId,
+        Carbon $date,
+        PlanConfig $config,
+    ): array {
+        $windowStart = $date->copy()->subDays($config->rolling_days - 1);
+        $rolling30dVolume = $this->getRollingCompanyVolume($companyId, $windowStart, $date);
+
+        if (bccomp($rolling30dVolume, '0', 4) <= 0) {
+            return [
+                'adjusted_results' => $adjustedResults,
+                'adjusted_bonuses' => $bonusResults,
+                'global_cap_with_bonus_triggered' => false,
+                'global_bonus_reduction_pct' => '0',
+            ];
+        }
+
+        // Get all rolling 30-day commissions already paid (including today if written)
+        $rolling30dAllPaid = $this->getRollingAllCommissions($companyId, $windowStart, $date);
+
+        // Also include rolling 30-day bonus ledger entries already paid (before today)
+        $rolling30dBonusPaid = $this->getRollingBonusPayments($companyId, $windowStart, $date->copy()->subDay());
+
+        // Sum today's proposed bonuses
+        $todayBonusTotal = '0';
+        foreach ($bonusResults as $bonus) {
+            $todayBonusTotal = bcadd($todayBonusTotal, $bonus->amount, 4);
+        }
+
+        // Total = historical commissions + historical bonuses + today's proposed bonuses
+        $historicalTotal = bcadd($rolling30dAllPaid, $rolling30dBonusPaid, 4);
+        $grandTotal = bcadd($historicalTotal, $todayBonusTotal, 4);
+        $totalPct = bcdiv($grandTotal, $rolling30dVolume, 8);
+
+        if (bccomp($totalPct, (string) $config->total_payout_cap_percent, 8) <= 0) {
+            return [
+                'adjusted_results' => $adjustedResults,
+                'adjusted_bonuses' => $bonusResults,
+                'global_cap_with_bonus_triggered' => false,
+                'global_bonus_reduction_pct' => '0',
+            ];
+        }
+
+        $overagePct = bcsub($totalPct, (string) $config->total_payout_cap_percent, 8);
+        $reductionMultiplier = bcsub('1', $overagePct, 8);
+        if (bccomp($reductionMultiplier, '0', 8) < 0) {
+            $reductionMultiplier = '0';
+        }
+
+        // Only reduce bonuses -- commissions were already capped
+        $adjustedBonuses = $bonusResults->map(function ($bonus) use ($reductionMultiplier) {
+            return new \App\DTOs\BonusResult(
+                user_id: $bonus->user_id,
+                amount: bcmul($bonus->amount, $reductionMultiplier, 4),
+                bonus_type_id: $bonus->bonus_type_id,
+                tier_achieved: $bonus->tier_achieved,
+                qualification_snapshot: $bonus->qualification_snapshot,
+                description: $bonus->description,
+            );
+        });
+
+        return [
+            'adjusted_results' => $adjustedResults,
+            'adjusted_bonuses' => $adjustedBonuses,
+            'global_cap_with_bonus_triggered' => true,
+            'global_bonus_reduction_pct' => $overagePct,
+        ];
+    }
+
+    private function getRollingBonusPayments(int $companyId, Carbon $windowStart, Carbon $windowEnd): string
+    {
+        $total = \App\Models\BonusLedgerEntry::withoutGlobalScope(CompanyScope::class)
+            ->where('company_id', $companyId)
+            ->whereHas('commissionRun', function ($query) use ($windowStart, $windowEnd) {
+                $query->whereDate('run_date', '>=', $windowStart->toDateString())
+                    ->whereDate('run_date', '<=', $windowEnd->toDateString());
+            })
+            ->sum('amount');
+
+        return (string) $total;
+    }
+
     private function getRollingCompanyVolume(int $companyId, Carbon $windowStart, Carbon $windowEnd): string
     {
         $volume = Transaction::withoutGlobalScope(CompanyScope::class)

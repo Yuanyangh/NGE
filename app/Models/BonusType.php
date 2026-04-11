@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\BonusTypeEnum;
 use App\Scopes\CompanyScope;
 use Illuminate\Database\Eloquent\Attributes\ScopedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,27 +11,26 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[ScopedBy(CompanyScope::class)]
-class CompensationPlan extends Model
+class BonusType extends Model
 {
     use HasFactory;
 
     protected $fillable = [
         'company_id',
+        'compensation_plan_id',
+        'type',
         'name',
-        'version',
-        'config',
-        'effective_from',
-        'effective_until',
+        'description',
         'is_active',
+        'priority',
     ];
 
     protected function casts(): array
     {
         return [
-            'config' => 'array',
-            'effective_from' => 'date',
-            'effective_until' => 'date',
+            'type' => BonusTypeEnum::class,
             'is_active' => 'boolean',
+            'priority' => 'integer',
         ];
     }
 
@@ -39,13 +39,23 @@ class CompensationPlan extends Model
         return $this->belongsTo(Company::class);
     }
 
-    public function commissionRuns(): HasMany
+    public function compensationPlan(): BelongsTo
     {
-        return $this->hasMany(CommissionRun::class);
+        return $this->belongsTo(CompensationPlan::class);
     }
 
-    public function bonusTypes(): HasMany
+    public function configs(): HasMany
     {
-        return $this->hasMany(BonusType::class);
+        return $this->hasMany(BonusTypeConfig::class);
+    }
+
+    public function tiers(): HasMany
+    {
+        return $this->hasMany(BonusTier::class)->orderBy('level');
+    }
+
+    public function ledgerEntries(): HasMany
+    {
+        return $this->hasMany(BonusLedgerEntry::class);
     }
 }

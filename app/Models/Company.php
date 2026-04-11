@@ -73,4 +73,19 @@ class Company extends Model
     {
         return $this->hasMany(WalletAccount::class);
     }
+
+    public function bonusTypes(): HasMany
+    {
+        return $this->hasMany(BonusType::class);
+    }
+
+    public function bonusLedgerEntries(): HasMany
+    {
+        return $this->hasMany(BonusLedgerEntry::class);
+    }
+
+    public function settings(): HasMany
+    {
+        return $this->hasMany(CompanySetting::class);
+    }
 }
