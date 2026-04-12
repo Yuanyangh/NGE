@@ -6,7 +6,9 @@ use App\Http\Controllers\Admin\CommissionLedgerController;
 use App\Http\Controllers\Admin\CommissionRunController;
 use App\Http\Controllers\Admin\CompanyController;
 use App\Http\Controllers\Admin\CompensationPlanController;
+use App\Http\Controllers\Admin\ComplianceController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\IncomeDisclosureController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\WalletController;
 use App\Http\Middleware\EnsureAdmin;
@@ -64,6 +66,14 @@ Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
 
         // Simulator
         Route::get('simulator', \App\Livewire\Admin\Pages\ScenarioSimulator::class)->name('simulator');
+
+        // Reports
+        Route::get('companies/{company}/reports/income-disclosure', [IncomeDisclosureController::class, 'index'])
+            ->name('companies.reports.income-disclosure');
+
+        // Compliance
+        Route::get('companies/{company}/compliance', [ComplianceController::class, 'index'])
+            ->name('companies.compliance');
 
         // Bonus Types (nested under company + plan)
         Route::get('companies/{company}/plans/{compensationPlan}/bonus-types', [BonusTypeController::class, 'index'])->name('companies.plans.bonus-types.index');

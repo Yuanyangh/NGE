@@ -9,6 +9,7 @@ use App\Models\BonusType;
 use App\Models\BonusTypeConfig;
 use App\Models\CommissionLedgerEntry;
 use App\Models\CommissionRun;
+use App\Models\CompanySetting;
 use App\Scopes\CompanyScope;
 use App\Models\Company;
 use App\Models\CompensationPlan;
@@ -53,6 +54,7 @@ class SoCommSeeder extends Seeder
         $this->createWalletAccounts();
         $this->createCommissionHistory();
         $this->seedBonusTypes();
+        $this->seedCompanySettings();
     }
 
     private function createUsers(): void
@@ -872,6 +874,25 @@ class SoCommSeeder extends Seeder
                 'qualifier_type' => $tier['qualifier_type'],
                 'rate' => null,
                 'amount' => $tier['amount'],
+            ]);
+        }
+    }
+
+    private function seedCompanySettings(): void
+    {
+        $settings = [
+            'inventory_loading_threshold' => '0.80',
+            'churn_at_risk_days' => '30',
+            'churn_inactive_days' => '60',
+            'churn_volume_decline_pct' => '50',
+            'churn_stagnant_leader_days' => '60',
+        ];
+
+        foreach ($settings as $key => $value) {
+            CompanySetting::create([
+                'company_id' => $this->company->id,
+                'key' => $key,
+                'value' => $value,
             ]);
         }
     }
