@@ -1,13 +1,14 @@
 @props([
     'route',
     'label',
+    'routeParams' => [],
 ])
 
 @php
     $isActive = request()->routeIs($route . '*');
     $href = '#';
     try {
-        $href = route($route);
+        $href = route($route, $routeParams);
     } catch (\Throwable $e) {
         // Route not yet registered — keep # as fallback
     }

@@ -8,7 +8,10 @@ use App\Http\Controllers\Admin\CompanyController;
 use App\Http\Controllers\Admin\CompensationPlanController;
 use App\Http\Controllers\Admin\ComplianceController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\GenealogyController;
 use App\Http\Controllers\Admin\IncomeDisclosureController;
+use App\Http\Controllers\Admin\KpiDashboardController;
+use App\Http\Controllers\Admin\ReportsController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\WalletController;
 use App\Http\Middleware\EnsureAdmin;
@@ -67,9 +70,24 @@ Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
         // Simulator
         Route::get('simulator', \App\Livewire\Admin\Pages\ScenarioSimulator::class)->name('simulator');
 
-        // Reports
+        // Network Explorer (Genealogy)
+        Route::get('companies/{company}/network', [GenealogyController::class, 'index'])
+            ->name('companies.network');
+
+        // KPI Dashboard
+        Route::get('companies/{company}/dashboard', [KpiDashboardController::class, 'index'])
+            ->name('companies.dashboard');
+
+        // Reports hub + individual reports
+        Route::get('companies/{company}/reports', [ReportsController::class, 'index'])
+            ->name('companies.reports.index');
+
+        // Legacy income disclosure route — must be registered BEFORE the {report} wildcard
         Route::get('companies/{company}/reports/income-disclosure', [IncomeDisclosureController::class, 'index'])
             ->name('companies.reports.income-disclosure');
+
+        Route::get('companies/{company}/reports/{report}', [ReportsController::class, 'show'])
+            ->name('companies.reports.show');
 
         // Compliance
         Route::get('companies/{company}/compliance', [ComplianceController::class, 'index'])
