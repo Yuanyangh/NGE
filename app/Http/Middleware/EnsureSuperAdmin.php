@@ -6,7 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class EnsureAdmin
+class EnsureSuperAdmin
 {
     public function handle(Request $request, Closure $next): Response
     {
@@ -14,8 +14,8 @@ class EnsureAdmin
             return redirect()->route('admin.login');
         }
 
-        if (! in_array(auth()->user()->role, ['admin', 'super_admin'])) {
-            abort(403, 'Unauthorized. Admin access required.');
+        if (auth()->user()->role !== 'super_admin') {
+            abort(403, 'Unauthorized. Super admin access required.');
         }
 
         return $next($request);

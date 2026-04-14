@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Http\Controllers\Admin\Concerns\EnforcesCompanyAccess;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
-use Carbon\Carbon;
 use Illuminate\View\View;
 
 class IncomeDisclosureController extends Controller
 {
+    use EnforcesCompanyAccess;
+
     public function index(Company $company): View
     {
+        $this->authorizeCompanyAccess($company);
+
         $startDate = now()->subYear()->toDateString();
         $endDate   = now()->toDateString();
 

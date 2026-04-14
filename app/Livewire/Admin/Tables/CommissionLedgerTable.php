@@ -49,6 +49,11 @@ class CommissionLedgerTable extends Component
         $query = CommissionLedgerEntry::withoutGlobalScope(CompanyScope::class)
             ->with(['company', 'user', 'commissionRun']);
 
+        $authUser = auth()->user();
+        if ($authUser && $authUser->isCompanyAdmin()) {
+            $query->where('company_id', $authUser->company_id);
+        }
+
         if ($this->search !== '') {
             $query->whereHas('user', fn ($q) => $q->where('name', 'like', '%' . $this->search . '%'));
         }

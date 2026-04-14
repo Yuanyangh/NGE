@@ -2,14 +2,12 @@
 
 namespace App\Livewire\Admin\Genealogy;
 
-use App\DTOs\ChurnRiskResult;
 use App\Models\GenealogyNode;
 use App\Models\Transaction;
-use App\Models\User;
 use App\Scopes\CompanyScope;
 use App\Services\Compliance\ChurnDetector;
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -19,12 +17,6 @@ class NetworkExplorer extends Component
     #[Locked]
     public int $companyId;
 
-    public string $search = '';
-
-    /** IDs of nodes that are currently expanded (loaded children visible). */
-    public array $expandedNodeIds = [];
-
-    /** The GenealogyNode ID currently selected for the side-panel. */
     public ?int $selectedNodeId = null;
 
     public function mount(int $companyId): void
@@ -32,109 +24,94 @@ class NetworkExplorer extends Component
         $this->companyId = $companyId;
     }
 
-    // -----------------------------------------------------------------
-    // Interactions
-    // -----------------------------------------------------------------
-
-    public function expandNode(int $nodeId): void
-    {
-        if (!in_array($nodeId, $this->expandedNodeIds, true)) {
-            $this->expandedNodeIds[] = $nodeId;
-        }
-    }
-
-    public function collapseNode(int $nodeId): void
-    {
-        $this->expandedNodeIds = array_values(
-            array_filter($this->expandedNodeIds, fn ($id) => $id !== $nodeId)
-        );
-    }
-
     public function selectNode(int $nodeId): void
     {
         $this->selectedNodeId = ($this->selectedNodeId === $nodeId) ? null : $nodeId;
     }
 
-    // -----------------------------------------------------------------
-    // Computed properties
-    // -----------------------------------------------------------------
-
-    #[Computed]
-    public function rootNodes(): Collection
+    public function clearSelection(): void
     {
-        return GenealogyNode::withoutGlobalScope(CompanyScope::class)
-            ->with('user:id,name,status,enrolled_at')
-            ->where('company_id', $this->companyId)
-            ->whereNull('sponsor_id')
-            ->when($this->search !== '', function ($q) {
-                $q->whereHas('user', fn ($uq) =>
-                    $uq->where('name', 'like', '%' . $this->search . '%')
-                );
-            })
-            ->orderBy('id')
-            ->get();
+        $this->selectedNodeId = null;
     }
 
     #[Computed]
-    public function childrenOf(): array
+    public function treeData(): array
     {
-        if (empty($this->expandedNodeIds)) {
-            return [];
-        }
-
-        $rows = GenealogyNode::withoutGlobalScope(CompanyScope::class)
-            ->with('user:id,name,status,enrolled_at')
+        // Load ALL nodes for this company with user data (typically < 1000 nodes)
+        $nodes = GenealogyNode::withoutGlobalScope(CompanyScope::class)
+            ->with('user:id,name,email,role,status,enrolled_at')
             ->where('company_id', $this->companyId)
-            ->whereIn('sponsor_id', $this->expandedNodeIds)
             ->orderBy('id')
             ->get();
 
-        return $rows->groupBy('sponsor_id')->map->values()->toArray();
-    }
+        // Get churn risk data
+        $churnResults = app(ChurnDetector::class)->scan($this->companyId, Carbon::today());
+        $churnByUserId = $churnResults->keyBy(fn ($r) => $r->user_id)->toArray();
 
-    #[Computed]
-    public function churnByUserId(): array
-    {
-        $detector = app(ChurnDetector::class);
-        $results  = $detector->scan($this->companyId, Carbon::today());
+        // Build flat array for Alpine.js
+        $treeNodes = [];
+        foreach ($nodes as $node) {
+            $userId = $node->user_id;
+            $churn = $churnByUserId[$userId] ?? null;
 
-        return $results->keyBy('user_id')->toArray();
-    }
-
-    #[Computed]
-    public function selectedNode(): ?GenealogyNode
-    {
-        if ($this->selectedNodeId === null) {
-            return null;
+            $treeNodes[] = [
+                'id' => $node->id,
+                'user_id' => $userId,
+                'sponsor_id' => $node->sponsor_id,
+                'name' => $node->user?->name ?? 'Unknown',
+                'email' => $node->user?->email ?? '',
+                'role' => $node->user?->role ?? 'customer',
+                'status' => $node->user?->status ?? 'inactive',
+                'enrolled_at' => $node->user?->enrolled_at?->format('M j, Y'),
+                'risk_level' => $churn['risk_level'] ?? 'healthy',
+                'risk_reason' => $churn['reason'] ?? '',
+            ];
         }
 
-        return GenealogyNode::withoutGlobalScope(CompanyScope::class)
-            ->with('user')
-            ->where('company_id', $this->companyId)
-            ->find($this->selectedNodeId);
+        return $treeNodes;
+    }
+
+    #[Computed]
+    public function stats(): array
+    {
+        $nodes = $this->treeData;
+        $total = count($nodes);
+        $affiliates = collect($nodes)->where('role', 'affiliate');
+
+        return [
+            'total' => $total,
+            'affiliates' => $affiliates->count(),
+            'at_risk' => collect($nodes)->whereIn('risk_level', ['at_risk', 'inactive_warning', 'declining'])->count(),
+            'healthy' => collect($nodes)->where('risk_level', 'healthy')->count(),
+        ];
     }
 
     #[Computed]
     public function selectedNodeStats(): array
     {
-        if ($this->selectedNodeId === null || $this->selectedNode === null) {
+        if ($this->selectedNodeId === null) {
             return [];
         }
 
-        $userId = $this->selectedNode->user_id;
+        $node = GenealogyNode::withoutGlobalScope(CompanyScope::class)
+            ->with('user')
+            ->where('company_id', $this->companyId)
+            ->find($this->selectedNodeId);
+
+        if (!$node) {
+            return [];
+        }
+
+        $userId = $node->user_id;
 
         $directDownline = GenealogyNode::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $this->companyId)
             ->where('sponsor_id', $this->selectedNodeId)
             ->count();
 
-        $totalDownline = GenealogyNode::withoutGlobalScope(CompanyScope::class)
+        $totalDownline = $node->descendants()
             ->where('company_id', $this->companyId)
-            ->where('id', $this->selectedNodeId)
-            ->first()
-            ?->descendants()
-            ->where('company_id', $this->companyId)
-            ->count() ?? 0;
+            ->count();
 
         $last30Volume = (string) Transaction::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $this->companyId)
@@ -148,10 +125,20 @@ class NetworkExplorer extends Component
             ])
             ->sum('xp');
 
+        // Get 30d earnings
+        $earnings = DB::table('commission_ledger_entries')
+            ->where('company_id', $this->companyId)
+            ->where('user_id', $userId)
+            ->where('created_at', '>=', now()->subDays(30))
+            ->sum('amount');
+
         return [
+            'node' => $node,
+            'user' => $node->user,
             'direct_downline' => $directDownline,
-            'total_downline'  => $totalDownline,
-            'volume_30d'      => $last30Volume,
+            'total_downline' => $totalDownline,
+            'volume_30d' => $last30Volume,
+            'earnings_30d' => bcadd((string) ($earnings ?? '0'), '0', 2),
         ];
     }
 

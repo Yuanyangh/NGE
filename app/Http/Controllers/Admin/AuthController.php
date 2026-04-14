@@ -12,7 +12,7 @@ class AuthController extends Controller
 {
     public function showLogin(): View|RedirectResponse
     {
-        if (Auth::check() && Auth::user()->role === 'admin') {
+        if (Auth::check() && in_array(Auth::user()->role, ['admin', 'super_admin'])) {
             return redirect()->route('admin.dashboard');
         }
 
@@ -27,7 +27,7 @@ class AuthController extends Controller
         ]);
 
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
-            if (Auth::user()->role !== 'admin') {
+            if (! in_array(Auth::user()->role, ['admin', 'super_admin'])) {
                 Auth::logout();
                 $request->session()->invalidate();
                 $request->session()->regenerateToken();

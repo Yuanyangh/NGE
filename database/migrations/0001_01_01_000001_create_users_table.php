@@ -14,7 +14,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('email');
             $table->string('password');
-            $table->enum('role', ['customer', 'affiliate', 'admin'])->default('customer');
+            $table->enum('role', ['customer', 'affiliate', 'admin', 'super_admin'])->default('customer');
             $table->enum('status', ['active', 'inactive', 'suspended'])->default('active');
             $table->timestamp('enrolled_at')->nullable();
             $table->timestamp('last_order_at')->nullable();

@@ -2,13 +2,15 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Http\Controllers\Admin\Concerns\EnforcesCompanyAccess;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
-use Carbon\Carbon;
 use Illuminate\View\View;
 
 class ReportsController extends Controller
 {
+    use EnforcesCompanyAccess;
+
     /**
      * All available report definitions. Used to render the hub cards
      * and to validate the {report} segment in show().
@@ -78,6 +80,8 @@ class ReportsController extends Controller
 
     public function index(Company $company): View
     {
+        $this->authorizeCompanyAccess($company);
+
         return view('admin.reports.index', [
             'company' => $company,
             'reports' => self::REPORTS,
@@ -86,6 +90,8 @@ class ReportsController extends Controller
 
     public function show(Company $company, string $report): View
     {
+        $this->authorizeCompanyAccess($company);
+
         abort_unless(array_key_exists($report, self::REPORTS), 404);
 
         $endDate   = now()->toDateString();

@@ -49,6 +49,11 @@ class CommissionRunTable extends Component
         $query = CommissionRun::withoutGlobalScope(CompanyScope::class)
             ->with(['company', 'compensationPlan']);
 
+        $authUser = auth()->user();
+        if ($authUser && $authUser->isCompanyAdmin()) {
+            $query->where('company_id', $authUser->company_id);
+        }
+
         if ($this->search !== '') {
             $query->whereHas('company', fn ($q) => $q->where('name', 'like', '%' . $this->search . '%'));
         }

@@ -42,7 +42,7 @@ class UserController extends Controller
             'company_id' => ['required', 'exists:companies,id'],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
-            'role' => ['required', 'in:customer,affiliate,admin'],
+            'role' => ['required', 'in:customer,affiliate,admin,super_admin'],
             'status' => ['required', 'in:active,inactive,suspended'],
         ]);
 

@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\ReportsController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\WalletController;
 use App\Http\Middleware\EnsureAdmin;
+use App\Http\Middleware\EnsureSuperAdmin;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
@@ -28,57 +29,31 @@ Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
         ->middleware('auth')
         ->name('logout');
 
-    // Protected routes
+    // Routes accessible by all admins (admin + super_admin)
     Route::middleware(['auth', EnsureAdmin::class])->group(function () {
         Route::get('/', DashboardController::class)->name('dashboard');
 
-        // Companies
-        Route::get('companies', [CompanyController::class, 'index'])->name('companies.index');
-        Route::get('companies/create', [CompanyController::class, 'create'])->name('companies.create');
-        Route::post('companies', [CompanyController::class, 'store'])->name('companies.store');
-        Route::get('companies/{company}/edit', [CompanyController::class, 'edit'])->name('companies.edit');
-        Route::put('companies/{company}', [CompanyController::class, 'update'])->name('companies.update');
-        Route::delete('companies/{company}', [CompanyController::class, 'destroy'])->name('companies.destroy');
-
-        // Users (cross-company)
-        Route::get('users', [UserController::class, 'index'])->name('users.index');
-        Route::get('users/{user}', [UserController::class, 'show'])->name('users.show');
-        Route::get('users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
-        Route::put('users/{user}', [UserController::class, 'update'])->name('users.update');
-        Route::delete('users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
-
-        // Compensation Plans (cross-company)
-        Route::get('compensation-plans', [CompensationPlanController::class, 'index'])->name('compensation-plans.index');
-        Route::get('compensation-plans/create', [CompensationPlanController::class, 'create'])->name('compensation-plans.create');
-        Route::post('compensation-plans', [CompensationPlanController::class, 'store'])->name('compensation-plans.store');
-        Route::get('compensation-plans/{compensationPlan}/edit', [CompensationPlanController::class, 'edit'])->name('compensation-plans.edit');
-        Route::put('compensation-plans/{compensationPlan}', [CompensationPlanController::class, 'update'])->name('compensation-plans.update');
-        Route::delete('compensation-plans/{compensationPlan}', [CompensationPlanController::class, 'destroy'])->name('compensation-plans.destroy');
-
-        // Commission Runs (read-only + trigger)
+        // Commission Runs (company admins see only their own — filtered in controller)
         Route::get('commission-runs', [CommissionRunController::class, 'index'])->name('commission-runs.index');
         Route::get('commission-runs/{id}', [CommissionRunController::class, 'show'])->name('commission-runs.show');
         Route::post('commission-runs/trigger', [CommissionRunController::class, 'trigger'])->name('commission-runs.trigger');
 
-        // Commission Ledger (read-only)
+        // Commission Ledger (company admins see only their own — filtered in controller)
         Route::get('commission-ledger', [CommissionLedgerController::class, 'index'])->name('commission-ledger.index');
 
-        // Wallet Accounts (read-only)
+        // Wallet Accounts (company admins see only their own — filtered in controller)
         Route::get('wallets', [WalletController::class, 'index'])->name('wallets.index');
         Route::get('wallets/{id}', [WalletController::class, 'show'])->name('wallets.show');
 
-        // Simulator
-        Route::get('simulator', \App\Livewire\Admin\Pages\ScenarioSimulator::class)->name('simulator');
-
-        // Network Explorer (Genealogy)
+        // Network Explorer (Genealogy) — company admin can only access their own company
         Route::get('companies/{company}/network', [GenealogyController::class, 'index'])
             ->name('companies.network');
 
-        // KPI Dashboard
+        // KPI Dashboard — company admin can only access their own company
         Route::get('companies/{company}/dashboard', [KpiDashboardController::class, 'index'])
             ->name('companies.dashboard');
 
-        // Reports hub + individual reports
+        // Reports hub + individual reports — company admin can only access their own company
         Route::get('companies/{company}/reports', [ReportsController::class, 'index'])
             ->name('companies.reports.index');
 
@@ -89,11 +64,11 @@ Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
         Route::get('companies/{company}/reports/{report}', [ReportsController::class, 'show'])
             ->name('companies.reports.show');
 
-        // Compliance
+        // Compliance — company admin can only access their own company
         Route::get('companies/{company}/compliance', [ComplianceController::class, 'index'])
             ->name('companies.compliance');
 
-        // Bonus Types (nested under company + plan)
+        // Bonus Types — company admin can only access their own company
         Route::get('companies/{company}/plans/{compensationPlan}/bonus-types', [BonusTypeController::class, 'index'])->name('companies.plans.bonus-types.index');
         Route::get('companies/{company}/plans/{compensationPlan}/bonus-types/create', [BonusTypeController::class, 'create'])->name('companies.plans.bonus-types.create');
         Route::post('companies/{company}/plans/{compensationPlan}/bonus-types', [BonusTypeController::class, 'store'])->name('companies.plans.bonus-types.store');
@@ -101,5 +76,34 @@ Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
         Route::put('companies/{company}/plans/{compensationPlan}/bonus-types/{bonusType}', [BonusTypeController::class, 'update'])->name('companies.plans.bonus-types.update');
         Route::delete('companies/{company}/plans/{compensationPlan}/bonus-types/{bonusType}', [BonusTypeController::class, 'destroy'])->name('companies.plans.bonus-types.destroy');
         Route::post('companies/{company}/plans/{compensationPlan}/bonus-types/{bonusType}/toggle', [BonusTypeController::class, 'toggleActive'])->name('bonus-types.toggle');
+    });
+
+    // Super-admin only routes
+    Route::middleware(['auth', EnsureSuperAdmin::class])->group(function () {
+        // Companies CRUD — super_admin only
+        Route::get('companies', [CompanyController::class, 'index'])->name('companies.index');
+        Route::get('companies/create', [CompanyController::class, 'create'])->name('companies.create');
+        Route::post('companies', [CompanyController::class, 'store'])->name('companies.store');
+        Route::get('companies/{company}/edit', [CompanyController::class, 'edit'])->name('companies.edit');
+        Route::put('companies/{company}', [CompanyController::class, 'update'])->name('companies.update');
+        Route::delete('companies/{company}', [CompanyController::class, 'destroy'])->name('companies.destroy');
+
+        // Users (cross-company) — super_admin only
+        Route::get('users', [UserController::class, 'index'])->name('users.index');
+        Route::get('users/{user}', [UserController::class, 'show'])->name('users.show');
+        Route::get('users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
+        Route::put('users/{user}', [UserController::class, 'update'])->name('users.update');
+        Route::delete('users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+
+        // Compensation Plans (global) — super_admin only
+        Route::get('compensation-plans', [CompensationPlanController::class, 'index'])->name('compensation-plans.index');
+        Route::get('compensation-plans/create', [CompensationPlanController::class, 'create'])->name('compensation-plans.create');
+        Route::post('compensation-plans', [CompensationPlanController::class, 'store'])->name('compensation-plans.store');
+        Route::get('compensation-plans/{compensationPlan}/edit', [CompensationPlanController::class, 'edit'])->name('compensation-plans.edit');
+        Route::put('compensation-plans/{compensationPlan}', [CompensationPlanController::class, 'update'])->name('compensation-plans.update');
+        Route::delete('compensation-plans/{compensationPlan}', [CompensationPlanController::class, 'destroy'])->name('compensation-plans.destroy');
+
+        // Scenario Simulator — super_admin only
+        Route::get('simulator', \App\Livewire\Admin\Pages\ScenarioSimulator::class)->name('simulator');
     });
 });

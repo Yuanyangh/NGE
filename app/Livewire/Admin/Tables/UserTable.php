@@ -54,6 +54,11 @@ class UserTable extends Component
     {
         $query = User::withoutGlobalScope(CompanyScope::class)->with('company');
 
+        $authUser = auth()->user();
+        if ($authUser && $authUser->isCompanyAdmin()) {
+            $query->where('company_id', $authUser->company_id);
+        }
+
         if ($this->search !== '') {
             $query->where(function ($q) {
                 $q->where('name', 'like', '%' . $this->search . '%')

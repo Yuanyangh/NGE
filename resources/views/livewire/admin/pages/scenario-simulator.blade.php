@@ -52,6 +52,7 @@
                     @error('company_id')
                         <p class="mt-1.5 text-xs text-rose-600 dark:text-rose-400">{{ $message }}</p>
                     @enderror
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">The company whose compensation plan you want to simulate</p>
                 </div>
 
                 {{-- Compensation Plan (dependent on company) --}}
@@ -74,9 +75,10 @@
                     @error('compensation_plan_id')
                         <p class="mt-1.5 text-xs text-rose-600 dark:text-rose-400">{{ $message }}</p>
                     @enderror
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">The specific pay plan to use for commission calculations</p>
                 </div>
 
-                <x-admin.input name="simulation_name" label="Simulation Name" wire="simulation_name" required />
+                <x-admin.input name="simulation_name" label="Simulation Name" wire="simulation_name" required hint="A label to identify this simulation run" />
 
                 <x-admin.select
                     name="projection_days"
@@ -84,35 +86,34 @@
                     wire="projection_days"
                     :options="[30 => '30 days', 60 => '60 days', 90 => '90 days', 180 => '180 days', 365 => '365 days']"
                     required
+                    hint="How far into the future to project results"
                 />
 
-                <x-admin.input name="seed" label="Random Seed" type="number" wire="seed" required />
+                <x-admin.input name="seed" label="Random Seed" type="number" wire="seed" required hint="Controls randomness — same seed always produces identical results" />
             </div>
         </x-admin.form-section>
 
         {{-- Section 2: Starting Network --}}
         <x-admin.form-section title="Starting Network">
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <x-admin.input name="starting_affiliates" label="Starting Affiliates" type="number" wire="starting_affiliates" required />
-                <x-admin.input name="starting_customers" label="Starting Customers" type="number" wire="starting_customers" required />
+                <x-admin.input name="starting_affiliates" label="Starting Affiliates" type="number" wire="starting_affiliates" required hint="Number of affiliates already in the network on day 1" />
+                <x-admin.input name="starting_customers" label="Starting Customers" type="number" wire="starting_customers" required hint="Number of customers already buying products on day 1" />
             </div>
         </x-admin.form-section>
 
         {{-- Section 3: Growth Assumptions --}}
         <x-admin.form-section title="Growth Assumptions">
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <x-admin.input name="new_affiliates_per_day" label="New Affiliates/Day" type="number" wire="new_affiliates_per_day" required step="0.1" />
-                <x-admin.input name="new_customers_per_affiliate_per_month" label="New Customers/Affiliate/Month" type="number" wire="new_customers_per_affiliate_per_month" required step="0.1" />
-                <div>
-                    <x-admin.input name="affiliate_to_customer_ratio" label="Affiliate-to-Customer Ratio" type="number" wire="affiliate_to_customer_ratio" required step="0.01" />
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Fraction of new customers that convert to affiliates</p>
-                </div>
+                <x-admin.input name="new_affiliates_per_day" label="New Affiliates/Day" type="number" wire="new_affiliates_per_day" required step="0.1" hint="Average number of new affiliates joining the network each day" />
+                <x-admin.input name="new_customers_per_affiliate_per_month" label="New Customers/Affiliate/Month" type="number" wire="new_customers_per_affiliate_per_month" required step="0.1" hint="Average new customers each affiliate brings in per month" />
+                <x-admin.input name="affiliate_to_customer_ratio" label="Affiliate-to-Customer Ratio" type="number" wire="affiliate_to_customer_ratio" required step="0.01" hint="Fraction of new customers who become affiliates themselves (e.g. 0.15 = 15%)" />
                 <x-admin.select
                     name="growth_curve"
                     label="Growth Curve"
                     wire="growth_curve"
                     :options="['linear' => 'Linear', 'exponential' => 'Exponential', 'logarithmic' => 'Logarithmic']"
                     required
+                    hint="How growth accelerates — Linear is steady, Exponential speeds up, Logarithmic slows down"
                 />
             </div>
         </x-admin.form-section>
@@ -120,36 +121,34 @@
         {{-- Section 4: Transaction Assumptions --}}
         <x-admin.form-section title="Transaction Assumptions">
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <x-admin.input name="average_order_xp" label="Average Order XP" type="number" wire="average_order_xp" required step="0.01" />
-                <x-admin.input name="orders_per_customer_per_month" label="Orders/Customer/Month" type="number" wire="orders_per_customer_per_month" required step="0.1" />
-                <x-admin.input name="smartship_adoption_rate" label="SmartShip Adoption Rate" type="number" wire="smartship_adoption_rate" required step="0.01" />
-                <x-admin.input name="smartship_average_xp" label="SmartShip Average XP" type="number" wire="smartship_average_xp" required step="0.01" />
-                <x-admin.input name="refund_rate" label="Refund Rate" type="number" wire="refund_rate" required step="0.01" />
+                <x-admin.input name="average_order_xp" label="Average Order XP" type="number" wire="average_order_xp" required step="0.01" hint="Average volume points (XP) earned per customer order" />
+                <x-admin.input name="orders_per_customer_per_month" label="Orders/Customer/Month" type="number" wire="orders_per_customer_per_month" required step="0.1" hint="How many orders a typical customer places each month" />
+                <x-admin.input name="smartship_adoption_rate" label="SmartShip Adoption Rate" type="number" wire="smartship_adoption_rate" required step="0.01" hint="Percentage of customers on auto-ship recurring orders (e.g. 0.30 = 30%)" />
+                <x-admin.input name="smartship_average_xp" label="SmartShip Average XP" type="number" wire="smartship_average_xp" required step="0.01" hint="Average volume points per auto-ship order" />
+                <x-admin.input name="refund_rate" label="Refund Rate" type="number" wire="refund_rate" required step="0.01" hint="Percentage of orders that get refunded (e.g. 0.05 = 5%)" />
             </div>
         </x-admin.form-section>
 
         {{-- Section 5: Retention --}}
         <x-admin.form-section title="Retention">
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <x-admin.input name="customer_monthly_churn_rate" label="Customer Monthly Churn Rate" type="number" wire="customer_monthly_churn_rate" required step="0.01" />
-                <x-admin.input name="affiliate_monthly_churn_rate" label="Affiliate Monthly Churn Rate" type="number" wire="affiliate_monthly_churn_rate" required step="0.01" />
+                <x-admin.input name="customer_monthly_churn_rate" label="Customer Monthly Churn Rate" type="number" wire="customer_monthly_churn_rate" required step="0.01" hint="Percentage of customers who stop buying each month (e.g. 0.08 = 8%)" />
+                <x-admin.input name="affiliate_monthly_churn_rate" label="Affiliate Monthly Churn Rate" type="number" wire="affiliate_monthly_churn_rate" required step="0.01" hint="Percentage of affiliates who leave the network each month (e.g. 0.05 = 5%)" />
             </div>
         </x-admin.form-section>
 
         {{-- Section 6: Tree Shape --}}
         <x-admin.form-section title="Tree Shape">
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <x-admin.input name="average_legs_per_affiliate" label="Average Legs/Affiliate" type="number" wire="average_legs_per_affiliate" required />
-                <div>
-                    <x-admin.input name="leg_balance_ratio" label="Leg Balance Ratio" type="number" wire="leg_balance_ratio" required step="0.1" />
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">0.0 = mega-leg, 1.0 = perfectly balanced</p>
-                </div>
+                <x-admin.input name="average_legs_per_affiliate" label="Average Legs/Affiliate" type="number" wire="average_legs_per_affiliate" required hint="How many direct recruits (frontline) each affiliate has on average" />
+                <x-admin.input name="leg_balance_ratio" label="Leg Balance Ratio" type="number" wire="leg_balance_ratio" required step="0.1" hint="How evenly volume is spread across legs — 0.0 = one mega-leg, 1.0 = perfectly balanced" />
                 <x-admin.select
                     name="depth_bias"
                     label="Depth Bias"
                     wire="depth_bias"
                     :options="['shallow' => 'Shallow', 'moderate' => 'Moderate', 'deep' => 'Deep']"
                     required
+                    hint="How deep the network tree grows — Shallow is wide and flat, Deep is narrow and tall"
                 />
             </div>
         </x-admin.form-section>

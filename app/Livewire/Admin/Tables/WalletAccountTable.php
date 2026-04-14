@@ -43,6 +43,11 @@ class WalletAccountTable extends Component
         $query = WalletAccount::withoutGlobalScope(CompanyScope::class)
             ->with(['user', 'company']);
 
+        $authUser = auth()->user();
+        if ($authUser && $authUser->isCompanyAdmin()) {
+            $query->where('company_id', $authUser->company_id);
+        }
+
         if ($this->search !== '') {
             $searchTerm = '%' . $this->search . '%';
             $query->whereHas('user', fn ($q) => $q->where('name', 'like', $searchTerm)

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Enums\BonusTypeEnum;
+use App\Http\Controllers\Admin\Concerns\EnforcesCompanyAccess;
 use App\Http\Controllers\Controller;
 use App\Models\BonusTier;
 use App\Models\BonusType;
@@ -16,8 +17,11 @@ use Illuminate\View\View;
 
 class BonusTypeController extends Controller
 {
+    use EnforcesCompanyAccess;
+
     public function index(Company $company, CompensationPlan $compensationPlan): View
     {
+        $this->authorizeCompanyAccess($company);
         $this->authorisePlan($company, $compensationPlan);
 
         $bonusTypes = BonusType::withoutGlobalScope(CompanyScope::class)
@@ -35,6 +39,7 @@ class BonusTypeController extends Controller
 
     public function create(Company $company, CompensationPlan $compensationPlan): View
     {
+        $this->authorizeCompanyAccess($company);
         $this->authorisePlan($company, $compensationPlan);
 
         return view('admin.bonus-types.create', [
@@ -45,6 +50,7 @@ class BonusTypeController extends Controller
 
     public function store(Request $request, Company $company, CompensationPlan $compensationPlan): RedirectResponse
     {
+        $this->authorizeCompanyAccess($company);
         $this->authorisePlan($company, $compensationPlan);
 
         $validated = $request->validate(array_merge($this->commonRules(), $this->typeSpecificRules($request)));
@@ -69,6 +75,7 @@ class BonusTypeController extends Controller
 
     public function edit(Company $company, CompensationPlan $compensationPlan, BonusType $bonusType): View
     {
+        $this->authorizeCompanyAccess($company);
         $this->authorisePlan($company, $compensationPlan);
         $this->authoriseBonusType($company, $compensationPlan, $bonusType);
 
@@ -86,6 +93,7 @@ class BonusTypeController extends Controller
 
     public function update(Request $request, Company $company, CompensationPlan $compensationPlan, BonusType $bonusType): RedirectResponse
     {
+        $this->authorizeCompanyAccess($company);
         $this->authorisePlan($company, $compensationPlan);
         $this->authoriseBonusType($company, $compensationPlan, $bonusType);
 
@@ -113,6 +121,7 @@ class BonusTypeController extends Controller
 
     public function toggleActive(Company $company, CompensationPlan $compensationPlan, BonusType $bonusType): RedirectResponse
     {
+        $this->authorizeCompanyAccess($company);
         $this->authorisePlan($company, $compensationPlan);
         $this->authoriseBonusType($company, $compensationPlan, $bonusType);
 
@@ -123,6 +132,7 @@ class BonusTypeController extends Controller
 
     public function destroy(Company $company, CompensationPlan $compensationPlan, BonusType $bonusType): RedirectResponse
     {
+        $this->authorizeCompanyAccess($company);
         $this->authorisePlan($company, $compensationPlan);
         $this->authoriseBonusType($company, $compensationPlan, $bonusType);
 

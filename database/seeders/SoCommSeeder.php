@@ -60,8 +60,10 @@ class SoCommSeeder extends Seeder
     private function createUsers(): void
     {
         $userData = [
-            // Admin
-            ['name' => 'Admin User', 'email' => 'admin@socomm.test', 'role' => 'admin', 'months_ago' => 12],
+            // Super Admin (SOCOMM operator)
+            ['name' => 'Admin User', 'email' => 'admin@socomm.test', 'role' => 'super_admin', 'months_ago' => 12],
+            // Company Admin (SoComm company manager)
+            ['name' => 'SoComm Manager', 'email' => 'manager@socomm.test', 'role' => 'admin', 'months_ago' => 12],
 
             // ===== TOP-LEVEL AFFILIATES =====
             ['name' => 'Alice Johnson', 'email' => 'alice@socomm.test', 'role' => 'affiliate', 'months_ago' => 10],
@@ -152,6 +154,7 @@ class SoCommSeeder extends Seeder
 
         // Top level
         $make('admin@socomm.test', null, 0);
+        $make('manager@socomm.test', null, 0);
         $make('alice@socomm.test', null, 0);
         $make('bob@socomm.test', null, 0);
 

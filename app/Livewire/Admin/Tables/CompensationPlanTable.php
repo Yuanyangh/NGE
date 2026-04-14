@@ -48,6 +48,11 @@ class CompensationPlanTable extends Component
     {
         $query = CompensationPlan::withoutGlobalScope(CompanyScope::class)->with('company');
 
+        $authUser = auth()->user();
+        if ($authUser && $authUser->isCompanyAdmin()) {
+            $query->where('company_id', $authUser->company_id);
+        }
+
         if ($this->search !== '') {
             $query->where('name', 'like', '%' . $this->search . '%');
         }

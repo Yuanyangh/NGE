@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Sign in - TyeUps NGE</title>
+    <title>Sign in - SOCOMM NGE</title>
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700" rel="stylesheet">
     @vite(['resources/css/admin.css'])
@@ -26,7 +26,7 @@
         <div class="w-full max-w-sm">
             {{-- Brand --}}
             <div class="mb-8 text-center">
-                <h1 class="text-3xl font-bold text-white">TyeUps</h1>
+                <h1 class="text-3xl font-bold text-white">SOCOMM</h1>
                 <span class="mt-1 inline-block rounded-full bg-white/15 px-3 py-0.5 text-xs font-semibold uppercase tracking-widest text-indigo-100">
                     Network Growth Engine
                 </span>
