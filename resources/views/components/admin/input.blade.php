@@ -6,6 +6,7 @@
     'required' => false,
     'value' => null,
     'wire' => null,
+    'hint' => null,
 ])
 
 <div {{ $attributes->only('class')->merge(['class' => '']) }}>
@@ -29,4 +30,7 @@
     @error($name)
         <p class="mt-1.5 text-xs text-rose-600 dark:text-rose-400">{{ $message }}</p>
     @enderror
+    @if ($hint)
+        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $hint }}</p>
+    @endif
 </div>

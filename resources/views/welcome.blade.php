@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TyeUps — Network Growth Engine</title>
+    <title>SOCOMM — Network Growth Engine</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -302,7 +302,7 @@
         <div style="width:32px;height:32px;background:linear-gradient(135deg,#3B82F6,#7C3AED);border-radius:8px;display:flex;align-items:center;justify-content:center;">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
         </div>
-        <span style="font-weight:800;font-size:16px;color:#F8FAFC;letter-spacing:-0.01em;">TyeUps<span style="color:#60A5FA;">NGE</span></span>
+        <span style="font-weight:800;font-size:16px;color:#F8FAFC;letter-spacing:-0.01em;">SOCOMM<span style="color:#60A5FA;">NGE</span></span>
     </a>
     <div style="display:flex;align-items:center;gap:24px;">
         <a href="#features" class="nav-link" id="nav-feat" style="display:none;">Features</a>
@@ -560,14 +560,14 @@
             <div style="width:28px;height:28px;background:linear-gradient(135deg,#3B82F6,#7C3AED);border-radius:7px;display:flex;align-items:center;justify-content:center;">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
             </div>
-            <span style="font-weight:700;font-size:14px;color:#F8FAFC;">TyeUps <span style="color:#60A5FA;">Network Growth Engine</span></span>
+            <span style="font-weight:700;font-size:14px;color:#F8FAFC;">SOCOMM <span style="color:#60A5FA;">Network Growth Engine</span></span>
         </div>
         <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
             <a href="/admin" class="nav-link" style="font-size:13px;">Admin Panel</a>
             <a href="#features" class="nav-link" style="font-size:13px;">Features</a>
             <a href="#how-it-works" class="nav-link" style="font-size:13px;">How It Works</a>
         </div>
-        <div style="color:#334155;font-size:12px;">&copy; {{ date('Y') }} TyeUps. All rights reserved.</div>
+        <div style="color:#334155;font-size:12px;">&copy; {{ date('Y') }} SOCOMM. All rights reserved.</div>
     </div>
 </footer>
 
